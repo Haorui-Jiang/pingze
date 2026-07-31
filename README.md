@@ -4,6 +4,8 @@
 [![GLM](https://img.shields.io/badge/LLM-Zhipu%20GLM--5.2-9e2f2f)](https://open.bigmodel.cn)
 [![License](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 
+[中文](./README.md)		[English](./README.en.md)
+
 > 基于 **GLM-5.2 大模型实时推断** 进行格律平仄分析。
 > 参考网站：`http://www.zhgc.com/pz/pz.asp`
 

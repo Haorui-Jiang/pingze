@@ -225,18 +225,34 @@ async function analyze() {
   startProgress();
 
   try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 56000);
     const r = await fetch('/api/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:JSON.stringify({ text, apiKey }),
+      body: JSON.stringify({ text, apiKey }),
+      signal: controller.signal,
     });
-    const data = await r.json();
+    clearTimeout(timer);
+    const raw = await r.text();
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      stopProgress();
+      showError('服务端返回内容为空或不是合法 JSON（多为 GLM 调用超时、被服务器网关截断，或服务器无法访问智谱 API）。请稍后重试，并检查服务器出网与代理超时设置。');
+      return;
+    }
     stopProgress();
     if (data.error) { showError(data.error); return; }
     render(data);
   } catch (e) {
     stopProgress();
-    showError('调用失败：' + e.message);
+    if (e && e.name === 'AbortError') {
+      showError('请求超时：已等待 56 秒未收到响应，可能是 GLM 调用较慢或被服务器网关断开，请稍后重试。');
+    } else {
+      showError('调用失败：' + e.message);
+    }
   } finally {
     btn.disabled = false;
     btn.textContent = old;

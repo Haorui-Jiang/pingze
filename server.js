@@ -82,7 +82,10 @@ const server = http.createServer((req, res) => {
 
       const userContent = `【待分析文本】\n${text}`;
 
+      let controller;
       try {
+        controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 55000);
         const r = await fetch(GLM_ENDPOINT, {
           method: 'POST',
           headers: {
@@ -97,7 +100,9 @@ const server = http.createServer((req, res) => {
             ],
             temperature: 0.3,
           }),
+          signal: controller.signal,
         });
+        clearTimeout(timer);
 
         if (!r.ok) {
           const detail = await r.text();
@@ -117,8 +122,14 @@ const server = http.createServer((req, res) => {
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(content);
       } catch (e) {
-        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ error: '服务端异常', detail: String(e) }));
+        const isTimeout = e && e.name === 'AbortError';
+        res.writeHead(isTimeout ? 504 : 500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({
+          error: isTimeout
+            ? '调用智谱 GLM 超时（已等待 55 秒）。可能是该请求较慢、服务器出网受限或上层网关截断了连接，请稍后重试。'
+            : '服务端异常',
+          detail: String(e),
+        }));
       }
     });
     return;

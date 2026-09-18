@@ -85,7 +85,7 @@ pingze/
 │   ├── auth.js                # 前端认证与数据层：登录、历史、作品、配额、升级引导
 │   ├── admin.js               # 后台逻辑：管理员登录校验 + 用户表渲染 + 改等级
 │   ├── supabase-config.example.js  # 前端配置模板（复制为 supabase-config.js 后填真实值）
-│   ├── baidu_verify_codeva-kWwbuP7hWC.html  # 百度站长平台站点归属验证文件，**文件名与内容不可改动**
+│   ├── baidu_verify_codeva-W1T8O1gd3p.html  # 百度站长平台站点归属验证文件，**文件名与内容不可改动**
 │   └── 二维码.jpg             # 会员付费引导二维码
 ├── lib/                       # 本地后端与 Serverless 函数共用的服务端逻辑
 │   ├── supabase-store.js      # 缓存 / 配额 / 流水 / 身份校验
@@ -216,15 +216,26 @@ command = "node scripts/gen-supabase-config.js"
 
 ### 🔎 百度站点验证（两种方式并存，互为备用）
 
-同一份归属校验在仓库里放了两处，任一生效即可通过；**两处的值必须一致**，改一个就改两个：
+归属校验在仓库里放了两处，任一生效即可通过；**两处必须是同一套码**，换码就要同步换两处：
 
 | 方式 | 位置 | 要点 |
 |---|---|---|
-| 验证文件 | `结果/baidu_verify_codeva-kWwbuP7hWC.html` | 32 字节、内容 `5ab6be3597ff14b21e61a2800ef9ca39`、**无结尾换行**；文件名与内容一字不能改 |
-| meta 标签 | `结果/index.html` 的 `<head>` 内 | `<meta name="baidu-site-verification" content="codeva-kWwbuP7hWC" />` |
+| 验证文件 | `结果/baidu_verify_codeva-W1T8O1gd3p.html` | 32 字节、内容 `b5da3bce8d976003fb0cec7f8984b6bc`、**无结尾换行**；文件名与内容一字不能改 |
+| meta 标签 | `结果/index.html` 的 `<head>` 内 | `<meta name="baidu-site-verification" content="codeva-W1T8O1gd3p" />` |
 
-自检：`node tools/check-domain.js` 的【3/4】段会同时断言「文件首次请求即 200 且内容一致」与
-「首页 `<head>` 内含该 meta」。
+自检：`node tools/check-domain.js` 的【3/5】段会断言「验证文件首次请求即 200 且内容一致」、
+「首页 `<head>` 内含该 meta」，以及**反向断言「`<head>` 内不得再有历史验证码」**。
+
+> **换验证文件的操作顺序**（换码时最容易出错的一步）：
+> 1. 把新文件放进 `结果/`，并从 `结果/` 删掉旧文件；
+> 2. 同步更新 `tools/sync-pingze.js` 的 `FILES` 白名单 —— **把旧那一行删掉**，
+>    否则脚本会因「源文件缺失」报错并以 exit 1 结束；
+> 3. 跑 `node tools/sync-pingze.js`：它会自动把仓库里的旧验证文件当**孤儿文件**删除
+>    （见脚本「2.5 清理白名单外的孤儿文件」段），不需要手工 `git rm`；
+> 4. 更新 `结果/index.html` 的 meta 与本文档上表，再提交推送。
+>
+> ⚠️ 仓库里**同时**保留多份历史验证文件并无好处：旧的码一旦失效就只是死文件，
+> 且站点根目录多一份可被扫到的文件。只保留当前生效的那一份。
 
 ### ⚠️ 站点设置必须关闭 Pretty URLs
 
@@ -232,14 +243,14 @@ command = "node scripts/gen-supabase-config.js"
 （API 里的 `processing_settings.html.pretty_urls = false`）。
 
 开启时 Netlify 会为每个 `.html` 生成 301：把 `/foo.html` 重定向到 **小写且去掉扩展名**的
-`/foo`。这对站点验证文件是致命的——`结果/baidu_verify_codeva-kWwbuP7hWC.html` 会先被 301 到
-`/baidu_verify_codeva-kwwbup7hwc`，百度/Google 的校验就会失败（它们要求目标 URL 首次请求即返回 200）。
+`/foo`。这对站点验证文件是致命的——`结果/baidu_verify_codeva-W1T8O1gd3p.html` 会先被 301 到
+`/baidu_verify_codeva-w1t8o1gd3p`，百度/Google 的校验就会失败（它们要求目标 URL 首次请求即返回 200）。
 
 判据与自检（不跟随重定向，看首次响应的状态码）：
 
 ```bash
 curl -sS -o /dev/null -w "%{http_code} %{redirect_url}\n" \
-  "https://pingze.site/baidu_verify_codeva-kWwbuP7hWC.html"
+  "https://pingze.site/baidu_verify_codeva-W1T8O1gd3p.html"
 # 期望：200 且 redirect_url 为空
 ```
 

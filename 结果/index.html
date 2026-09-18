@@ -46,6 +46,15 @@
   }
   header .sub { color: var(--ink-soft); font-size: 15px; letter-spacing: 2px; }
 
+  /* 站内页面入口（目前指向平水韵查询页，后续页面继续往这里加） */
+  .nav { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin: 16px 0 22px; }
+  .nav a {
+    font-size: 14px; letter-spacing: 2px; text-decoration: none; color: var(--seal);
+    background: rgba(255,253,248,0.85); border: 1px solid var(--seal-soft);
+    border-radius: 999px; padding: 6px 18px; transition: background .15s;
+  }
+  .nav a:hover { background: rgba(192,86,79,0.10); }
+
   .card {
     background: rgba(255,253,248,0.82);
     border: 1px solid var(--line);
@@ -258,6 +267,10 @@
     <div class="sub">DeepSeek-V4.1-Flash · 逐字标注 · 文体判定 · 韵部溯源</div>
   </header>
 
+  <div class="nav">
+    <a href="/pingshui-yun">平水韵查询 · 106 韵韵部对照表 →</a>
+  </div>
+
   <div class="userbar">
     <span class="user-info" id="userInfo">未登录</span>
     <span class="quota" id="quotaInfo"></span>
@@ -321,7 +334,8 @@
   </div>
 
   <footer>
-    仿 <code>www.zhgc.com/pz/pz.asp</code> 功能 · 以大模型替代逐字字典查表
+    仿 <code>www.zhgc.com/pz/pz.asp</code> 功能 · 以大模型替代逐字字典查表<br>
+    <a href="/pingshui-yun" style="color:var(--seal);text-decoration:none">平水韵查询 · 106 韵韵部对照表</a>
   </footer>
 
   <div class="modal-mask" id="authModal">

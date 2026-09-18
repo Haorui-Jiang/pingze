@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>平水韵查询 · 106 韵韵部对照表与单字查韵</title>
+<meta name="description" content="平水韵查询与 106 韵韵部对照表：输入一个字即可查它属于平水韵哪一韵、是平声还是仄声；并按上平、下平、上声、去声、入声五卷浏览完整韵字表。" />
+<meta name="keywords" content="平水韵查询,平水韵韵部对照表,平水韵是什么,平水韵表,单字查韵部,平仄查询" />
+<style>
+  :root {
+    --ink: #2b2b2b;
+    --ink-soft: #5a534b;
+    --ink-faint: #8b8378;
+    --seal: #9e2f2f;
+    --seal-soft: #c0564f;
+    --paper: #f5efe3;
+    --paper-2: #efe7d6;
+    --paper-3: #e7ddc8;
+    --line: #d8cdb8;
+    --gold: #b08d3e;
+    --ping: #2f7d56;
+    --ze: #a4322c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "KaiTi", "STKaiti", "楷体", "Songti SC", serif;
+    background:
+      radial-gradient(circle at 18% 8%, rgba(158,47,47,0.05), transparent 40%),
+      radial-gradient(circle at 82% 92%, rgba(176,141,62,0.06), transparent 40%),
+      linear-gradient(135deg, var(--paper), var(--paper-2));
+    color: var(--ink);
+    min-height: 100vh;
+    line-height: 1.8;
+    padding: 28px 16px 60px;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; }
+
+  header { text-align: center; margin-bottom: 22px; }
+  header h1 {
+    font-size: 34px; letter-spacing: 8px; font-weight: 700;
+    text-shadow: 0 2px 0 rgba(255,255,255,0.6);
+  }
+  header .sub { color: var(--ink-soft); font-size: 14px; letter-spacing: 2px; margin-top: 4px; }
+  header .sub b { color: var(--seal); font-weight: 600; }
+
+  .nav {
+    display: flex; justify-content: center; gap: 10px; flex-wrap: wrap;
+    margin: 14px 0 22px;
+  }
+  .nav a {
+    font-size: 14px; letter-spacing: 2px; text-decoration: none;
+    color: var(--seal); background: rgba(255,253,248,0.85);
+    border: 1px solid var(--seal-soft); border-radius: 999px;
+    padding: 6px 18px; transition: background .15s;
+  }
+  .nav a:hover { background: rgba(192,86,79,0.10); }
+  .nav a.primary {
+    color: #fff; background: linear-gradient(135deg, var(--seal), var(--seal-soft));
+    border-color: transparent;
+  }
+
+  .card {
+    background: rgba(255,253,248,0.85);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 24px 26px;
+    margin-bottom: 20px;
+    box-shadow: 0 8px 30px rgba(120,100,70,0.10);
+  }
+  .card h2 {
+    font-size: 19px; letter-spacing: 3px; color: var(--seal);
+    margin-bottom: 14px; display: flex; align-items: center; gap: 10px;
+  }
+  .card h2::before { content: "❖"; font-size: 14px; color: var(--gold); }
+  .card h2 .n {
+    font-size: 12px; letter-spacing: 1px; color: #fff; background: var(--seal);
+    border-radius: 3px; padding: 1px 8px; font-weight: 400;
+  }
+  .hint { font-size: 13px; color: var(--ink-soft); margin-top: 8px; }
+  .hint code { background: var(--paper-2); padding: 1px 6px; border-radius: 4px; font-family: monospace; }
+
+  /* ---------- 概念区 ---------- */
+  .concept { font-size: 15px; color: var(--ink); }
+  .concept p { margin-bottom: 10px; }
+  .concept b { color: var(--seal); }
+  .fact {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 12px; margin: 14px 0 4px;
+  }
+  .fact .meta {
+    background: #fffdf8; border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 14px; text-align: center;
+  }
+  .fact .k { font-size: 12px; color: var(--ink-soft); letter-spacing: 2px; }
+  .fact .v { font-size: 21px; color: var(--seal); margin-top: 4px; letter-spacing: 1px; }
+
+  /* ---------- 查询区 ---------- */
+  .search-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: stretch; }
+  input[type=text] {
+    flex: 1; min-width: 220px; font-family: inherit; font-size: 18px; color: var(--ink);
+    letter-spacing: 2px;
+    background: #fffdf8; border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px 14px; outline: none; transition: border-color .2s, box-shadow .2s;
+  }
+  input[type=text]:focus { border-color: var(--seal-soft); box-shadow: 0 0 0 3px rgba(192,86,79,0.12); }
+  .btn {
+    font-family: inherit; font-size: 17px; letter-spacing: 4px; color: #fff;
+    background: linear-gradient(135deg, var(--seal), var(--seal-soft));
+    border: none; border-radius: 10px; padding: 12px 26px; cursor: pointer;
+    box-shadow: 0 6px 18px rgba(158,47,47,0.28); transition: transform .15s;
+  }
+  .btn:hover { transform: translateY(-2px); }
+  .mini-btn {
+    font-family: inherit; font-size: 13px; letter-spacing: 2px; color: var(--seal);
+    background: #fffdf8; border: 1px solid var(--seal-soft); border-radius: 8px;
+    padding: 6px 14px; cursor: pointer; transition: background .15s;
+  }
+  .mini-btn:hover { background: rgba(192,86,79,0.10); }
+  .mini-btn.on { color: #fff; background: linear-gradient(135deg, var(--seal), var(--seal-soft)); border-color: transparent; }
+
+  /* 查字结果 */
+  #qResult { margin-top: 18px; }
+  .ch-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+  .ch-card {
+    width: 100%; max-width: 320px; border: 1px solid var(--line); border-radius: 10px;
+    background: #fffdf8; padding: 12px 14px;
+  }
+  .ch-card .top { display: flex; align-items: baseline; gap: 10px; }
+  .ch-card .big { font-size: 28px; line-height: 1.1; }
+  .badge {
+    font-size: 12px; letter-spacing: 1px; border-radius: 4px; padding: 2px 8px; color: #fff;
+  }
+  .badge.ping { background: var(--ping); }
+  .badge.ze { background: var(--ze); }
+  .badge.none { background: #9a9a9a; }
+  .ch-card .where { font-size: 14px; color: var(--ink-soft); margin-top: 6px; }
+  .chip {
+    display: inline-block; font-size: 13px; color: var(--seal); cursor: pointer;
+    background: var(--paper-2); border: 1px solid var(--line); border-radius: 6px;
+    padding: 1px 9px; margin: 2px 4px 2px 0;
+  }
+  .chip:hover { background: rgba(192,86,79,0.12); }
+  .ch-card.miss .where { color: var(--ink-faint); }
+
+  /* ---------- 韵表 ---------- */
+  .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+  .toolbar input[type=text] { flex: 1; min-width: 180px; font-size: 15px; padding: 9px 12px; }
+  .tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+  .tabs .mini-btn { font-size: 13px; }
+
+  .yun-list { display: grid; grid-template-columns: 1fr; gap: 10px; }
+  .yun {
+    border: 1px solid var(--line); border-radius: 10px; background: #fffdf8; overflow: hidden;
+  }
+  .yun > .yh {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 10px 14px; cursor: pointer; transition: background .15s;
+  }
+  .yun > .yh:hover { background: var(--paper-2); }
+  .yun > .yh .ord {
+    font-size: 12px; color: var(--ink-faint); letter-spacing: 1px; min-width: 34px;
+  }
+  .yun > .yh .nm { font-size: 17px; letter-spacing: 2px; }
+  .yun > .yh .cnt { font-size: 12.5px; color: var(--ink-faint); }
+  .yun > .yh .arrow { margin-left: auto; color: var(--ink-faint); font-size: 12px; }
+  .yun .width-tag { font-size: 11.5px; letter-spacing: 1px; border-radius: 3px; padding: 1px 7px; }
+  .width-tag.kuan { background: #f3e2c6; color: #8a6414; }
+  .width-tag.chang { background: var(--paper-3); color: var(--ink-soft); }
+  .width-tag.xian { background: #f3d4c4; color: #8a4022; }
+  .yun > .yb { display: none; padding: 4px 14px 14px; border-top: 1px dashed var(--line); }
+  .yun.open > .yb { display: block; }
+  .chars { font-size: 19px; line-height: 2.1; letter-spacing: 2px; word-break: break-all; }
+  .chars span { padding: 0 1px; border-radius: 3px; }
+  .chars span.hit { background: var(--gold); color: #fff; }
+  .chars span.dim { color: var(--ink-faint); }
+
+  .empty { color: var(--ink-faint); font-size: 14px; padding: 8px 0; }
+
+  /* ---------- 宽窄韵 ---------- */
+  .rank { display: flex; flex-wrap: wrap; gap: 8px; }
+  .rank .chip { cursor: pointer; }
+  .rank .chip b { color: var(--seal); font-weight: 600; }
+
+  .note {
+    margin-top: 12px; padding: 12px 15px; border-left: 3px solid var(--gold);
+    background: var(--paper-2); border-radius: 0 8px 8px 0; font-size: 14px; color: var(--ink-soft);
+  }
+
+  /* ---------- CTA ---------- */
+  .cta { text-align: center; padding: 22px 26px; }
+  .cta p { color: var(--ink-soft); font-size: 14.5px; margin-bottom: 14px; }
+
+  footer {
+    text-align: center; color: var(--ink-faint); font-size: 12.5px;
+    letter-spacing: 1px; margin-top: 6px; line-height: 2;
+  }
+  footer a { color: var(--seal); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  .err {
+    border: 1px solid var(--ze); background: #fbeae9; color: var(--ze);
+    border-radius: 10px; padding: 16px 18px; font-size: 15px;
+  }
+
+  @media (max-width: 600px) {
+    header h1 { font-size: 26px; letter-spacing: 5px; }
+    .card { padding: 18px 16px; }
+    .ch-card { max-width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>平水韵查询</h1>
+    <div class="sub">韵部对照表 · <b>106 韵</b> · 单字查韵部 · 平声 / 仄声判定</div>
+  </header>
+
+  <div class="nav">
+    <a class="primary" href="/">← 在线平仄检测（首页）</a>
+  </div>
+
+  <!-- ===== 概念区 ===== -->
+  <div class="card">
+    <h2><span class="n">什么是平水韵</span></h2>
+    <div class="concept">
+      <p>
+        <b>平水韵</b>是近体诗（律诗、绝句）押韵所用的韵书系统，共 <b>106 韵</b>。
+        它在《广韵》《集韵》206 韵的基础上合并同用之韵而成，因编者刘渊为平水（今山西临汾）人而得名；
+        亦有金人王文郁《平水新刊韵略》先行分为 106 韵之说。
+      </p>
+      <p>
+        106 韵按声调分为五卷：<b>上平</b> 15 韵、<b>下平</b> 15 韵、<b>上声</b> 29 韵、<b>去声</b> 30 韵、<b>入声</b> 17 韵。
+        上平、下平只是因为平声字多、分作上下两卷编排，<b>并不是</b>普通话「阴平 / 阳平」的区别。
+      </p>
+      <p>
+        格律上：平声即「平」，上声、去声、入声统称「仄」。
+        近体诗一般<b>押平声韵、一韵到底</b>；入声在普通话里已消失、派入其他声调，
+        这也是今人判断平仄最容易出错的地方 —— 用本表查一个字，比凭今音猜要可靠。
+      </p>
+      <div class="fact" id="factBox"></div>
+    </div>
+  </div>
+
+  <!-- ===== 单字查韵部 ===== -->
+  <div class="card">
+    <h2><span class="n">单字查韵部</span></h2>
+    <div class="search-row">
+      <input type="text" id="q" placeholder="输入一个字，或一句话（如：白日依山尽）" maxlength="60"
+             autocomplete="off" />
+      <button class="btn" id="btnQ">查　韵</button>
+    </div>
+    <p class="hint">
+      一个字可能同时收入多个韵部（多音多义），这里会<b>全部列出</b>。点韵部名可跳到下方字表并高亮该字。
+    </p>
+    <div id="qResult"></div>
+  </div>
+
+  <!-- ===== 106 韵字表 ===== -->
+  <div class="card">
+    <h2><span class="n">106 韵完整字表</span></h2>
+    <div class="toolbar">
+      <div class="tabs" id="tabs">
+        <button class="mini-btn on" data-filter="all">全部 106</button>
+        <button class="mini-btn" data-filter="平声">平声 30</button>
+        <button class="mini-btn" data-filter="上声">上声 29</button>
+        <button class="mini-btn" data-filter="去声">去声 30</button>
+        <button class="mini-btn" data-filter="入声">入声 17</button>
+      </div>
+      <input type="text" id="filter" placeholder="按韵目名或韵字筛选（如：东、江阳）" autocomplete="off" />
+      <button class="mini-btn" id="btnExpand">展开全部</button>
+    </div>
+    <div class="yun-list" id="yunList"></div>
+    <div class="empty" id="yunEmpty" style="display:none">没有匹配的韵部。</div>
+  </div>
+
+  <!-- ===== 宽韵 / 窄韵 / 险韵 ===== -->
+  <div class="card">
+    <h2><span class="n">宽韵 · 常韵 · 险韵</span></h2>
+    <p style="font-size:14.5px;color:var(--ink-soft);margin-bottom:12px">
+      韵部收字多少，直接决定押韵的难易：<b>宽韵</b>收字多，可选的词多、容易成篇；
+      <b>险韵</b>收字极少，用字受限、难押却也常出巧句。下面按本表实际收录字数排列。
+    </p>
+    <p style="font-size:14px;margin:10px 0 6px;color:var(--ink-soft)">宽韵（收字多，易押）</p>
+    <div class="rank" id="rankKuan"></div>
+    <p style="font-size:14px;margin:14px 0 6px;color:var(--ink-soft)">险韵（收字少，难押）</p>
+    <div class="rank" id="rankXian"></div>
+    <div class="note">
+      「宽 / 常 / 险」的口径依本表收录字数划分：≥ 150 字为宽韵，≤ 20 字为险韵，其余为常韵；
+      不同韵书与统计口径下会略有出入。
+    </div>
+  </div>
+
+  <!-- ===== CTA ===== -->
+  <div class="card cta">
+    <p>查到韵部之后，把你自己的诗贴回去做一次逐字平仄与韵脚检测。</p>
+    <a class="btn" href="/" style="display:inline-block;text-decoration:none">去检测我的作品</a>
+  </div>
+
+  <footer>
+    韵表数据整理自
+    <a href="http://www.zhgc.com/bbs/dispbbs.asp?boardid=11&amp;id=257242" target="_blank" rel="noopener">中华国粹网《【备考】平水韵》</a>
+    二楼简体版（《增广诗韵集成》增补修订版，韵目 106 个）<br>
+    本站仅作字形与韵部对照的整理展示，原帖保留全部权利；如有讹误欢迎反馈修订
+  </footer>
+
+</div>
+
+<script src="pingshui-yun-data.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var DATA = window.PINGSHUI_YUN;
+  var box = document.getElementById('yunList');
+  if (!DATA || !Array.isArray(DATA.yun) || !DATA.yun.length) {
+    document.querySelector('.wrap').insertAdjacentHTML('afterbegin',
+      '<div class="card"><div class="err"><b>韵表数据未加载</b><br>' +
+      '未能读到 <code>pingshui-yun-data.js</code>，请确认该文件与本页在同一目录下。</div></div>');
+    return;
+  }
+
+  var YUN = DATA.yun;
+
+  // 字 → 韵部下标 的反查表。同一字可能属于多个韵部（多音多义），全部保留。
+  var IDX = Object.create(null);
+  YUN.forEach(function (y, i) {
+    var seen = Object.create(null);
+    for (var k = 0; k < y.c.length; k++) {
+      var ch = y.c[k];
+      if (seen[ch]) continue;      // 同一韵部内的重复字只记一次
+      seen[ch] = 1;
+      (IDX[ch] || (IDX[ch] = [])).push(i);
+    }
+  });
+
+  var uniqueChars = DATA.stats && DATA.stats.uniqueChars
+    ? DATA.stats.uniqueChars
+    : Object.keys(IDX).length;
+
+  // ---------- 概念区数字 ----------
+  document.getElementById('factBox').innerHTML = [
+    ['韵　目', YUN.length + ' 韵'],
+    ['平声韵', YUN.filter(function (y) { return y.g === '平声'; }).length + ' 韵'],
+    ['仄声韵', YUN.filter(function (y) { return y.g !== '平声'; }).length + ' 韵'],
+    ['收录字', uniqueChars + ' 字']
+  ].map(function (p) {
+    return '<div class="meta"><div class="k">' + p[0] + '</div><div class="v">' + p[1] + '</div></div>';
+  }).join('');
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (m) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
+    });
+  }
+
+  // ---------- 宽韵 / 险韵 ----------
+  function widthTag(n) {
+    if (n >= 150) return ['kuan', '宽韵'];
+    if (n <= 20) return ['xian', '险韵'];
+    return ['chang', '常韵'];
+  }
+
+  var sorted = YUN.slice().sort(function (a, b) { return b.c.length - a.c.length; });
+  function rankHtml(arr) {
+    return arr.map(function (y) {
+      var i = YUN.indexOf(y);
+      return '<span class="chip" data-jump="' + i + '">' + esc(y.t + y.n) +
+             ' <b>' + y.c.length + '</b> 字</span>';
+    }).join('');
+  }
+  document.getElementById('rankKuan').innerHTML = rankHtml(sorted.slice(0, 10));
+  document.getElementById('rankXian').innerHTML = rankHtml(sorted.slice(-10).reverse());
+
+  // ---------- 韵表渲染 ----------
+  var state = { filter: 'all', kw: '', hit: '' };
+
+  function matchYun(y) {
+    if (state.filter !== 'all' && y.g !== state.filter) return false;
+    if (!state.kw) return true;
+    return (y.t + y.n).indexOf(state.kw) >= 0 || y.c.indexOf(state.kw) >= 0;
+  }
+
+  function charsHtml(y) {
+    var out = '';
+    for (var k = 0; k < y.c.length; k++) {
+      var ch = y.c[k];
+      var cls = '';
+      if (state.hit && ch === state.hit) cls = 'hit';
+      else if (state.hit) cls = 'dim';
+      out += '<span class="' + cls + '">' + esc(ch) + '</span>';
+    }
+    return out;
+  }
+
+  function renderList() {
+    var shown = 0;
+    var html = '';
+    YUN.forEach(function (y, i) {
+      if (!matchYun(y)) return;
+      shown++;
+      var tg = widthTag(y.c.length);
+      html += '<div class="yun" data-i="' + i + '">' +
+        '<div class="yh" data-toggle="' + i + '">' +
+          '<span class="ord">' + y.t + '·' + y.o + '</span>' +
+          '<span class="nm">' + esc(y.t + y.n) + '</span>' +
+          '<span class="badge ' + (y.p === '平' ? 'ping' : 'ze') + '">' + y.p + '</span>' +
+          '<span class="width-tag ' + tg[0] + '">' + tg[1] + '</span>' +
+          '<span class="cnt">' + y.c.length + ' 字</span>' +
+          '<span class="arrow">展开 ▾</span>' +
+        '</div>' +
+        '<div class="yb"><div class="chars">' + charsHtml(y) + '</div></div>' +
+      '</div>';
+    });
+    box.innerHTML = html;
+    document.getElementById('yunEmpty').style.display = shown ? 'none' : 'block';
+  }
+
+  function openYun(i, hit) {
+    state.hit = hit || '';
+    renderList();
+    var el = box.querySelector('.yun[data-i="' + i + '"]');
+    if (!el) return false;
+    el.classList.add('open');
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return true;
+  }
+
+  // 点击韵部标题：展开 / 收起
+  box.addEventListener('click', function (e) {
+    var h = e.target.closest ? e.target.closest('[data-toggle]') : null;
+    if (!h) return;
+    var el = h.parentNode;
+    el.classList.toggle('open');
+    h.querySelector('.arrow').textContent = el.classList.contains('open') ? '收起 ▴' : '展开 ▾';
+  });
+
+  // 宽窄韵 / 查字结果里的韵部 chip：跳到字表
+  document.addEventListener('click', function (e) {
+    var c = e.target.closest ? e.target.closest('.chip[data-jump]') : null;
+    if (!c) return;
+    var i = parseInt(c.getAttribute('data-jump'), 10);
+    var hit = c.getAttribute('data-hit') || '';
+    openYun(i, hit);
+  });
+
+  // 声调切换
+  document.getElementById('tabs').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('.mini-btn') : null;
+    if (!b) return;
+    state.filter = b.getAttribute('data-filter');
+    state.hit = '';
+    Array.prototype.forEach.call(this.querySelectorAll('.mini-btn'), function (x) {
+      x.classList.toggle('on', x === b);
+    });
+    renderList();
+  });
+
+  // 关键字筛选
+  document.getElementById('filter').addEventListener('input', function () {
+    state.kw = this.value.trim();
+    state.hit = '';
+    renderList();
+  });
+
+  // 展开 / 收起全部
+  var expandAll = false;
+  document.getElementById('btnExpand').addEventListener('click', function () {
+    expandAll = !expandAll;
+    Array.prototype.forEach.call(box.querySelectorAll('.yun'), function (el) {
+      el.classList.toggle('open', expandAll);
+      el.querySelector('.arrow').textContent = expandAll ? '收起 ▴' : '展开 ▾';
+    });
+    this.textContent = expandAll ? '收起全部' : '展开全部';
+  });
+
+  // ---------- 单字查韵部 ----------
+  function lookup() {
+    var raw = document.getElementById('q').value.replace(/[^一-鿿]/g, '');
+    var out = document.getElementById('qResult');
+    if (!raw) { out.innerHTML = '<p class="empty">请输入要查的字。</p>'; return; }
+
+    var cards = raw.split('').map(function (ch) {
+      var idx = IDX[ch];
+      if (!idx) {
+        return '<div class="ch-card miss"><div class="top"><span class="big">' + esc(ch) + '</span>' +
+          '<span class="badge none">未收录</span></div>' +
+          '<div class="where">本表未收此字，常见于后起字或异体写法。</div></div>';
+      }
+      var ping = idx.some(function (i) { return YUN[i].p === '平'; });
+      var ze = idx.some(function (i) { return YUN[i].p === '仄'; });
+      var badge = ping && ze ? '平 / 仄' : (ping ? '平' : '仄');
+      var bcls = ping && ze ? 'none' : (ping ? 'ping' : 'ze');
+      var chips = idx.map(function (i) {
+        var y = YUN[i];
+        return '<span class="chip" data-jump="' + i + '" data-hit="' + esc(ch) + '">' +
+               esc(y.t + y.n) + '</span>';
+      }).join('');
+      return '<div class="ch-card"><div class="top"><span class="big">' + esc(ch) + '</span>' +
+        '<span class="badge ' + bcls + '">' + badge + '</span></div>' +
+        '<div class="where">所属韵部：' + chips + '</div></div>';
+    }).join('');
+
+    out.innerHTML = '<div class="ch-grid">' + cards + '</div>';
+  }
+
+  document.getElementById('btnQ').addEventListener('click', lookup);
+  document.getElementById('q').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') lookup();
+  });
+
+  renderList();
+})();
+</script>
+</body>
+</html>

@@ -39,3 +39,11 @@
   from = "/admin"
   to = "/admin.html"
   status = 200
+
+# 平水韵查询页：/pingshui-yun 映射到 pingshui-yun.html。
+# 站点已关闭 Pretty URLs，/pingshui-yun/ 这类目录式地址不会自动找 index，只能走重定向。
+# 与 server.local.js 的 STATIC_ROUTES 必须成对维护，否则本地能开、线上 404。
+[[redirects]]
+  from = "/pingshui-yun"
+  to = "/pingshui-yun.html"
+  status = 200

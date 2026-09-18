@@ -46,6 +46,14 @@ const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || '';
 // 前端新增了 supabase-config.js / auth.js 两个本地脚本，本地没有静态服务的话会 404。
 // 这里把「结果」目录整体挂到根路径，行为与 Netlify 保持一致。
 const PUBLIC_DIR = path.join(__dirname, '结果');
+
+// 无扩展名的友好地址 → publish 目录下的静态文件。
+// 与 netlify.toml 的 [[redirects]] 必须成对维护（见文件内 STATIC_ROUTES 处说明）。
+const STATIC_ROUTES = {
+  '/admin': 'admin.html',
+  '/pingshui-yun': 'pingshui-yun.html',
+};
+
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'application/javascript; charset=utf-8',
@@ -211,10 +219,12 @@ const server = http.createServer((req, res) => {
   // ---------- 静态资源 ----------
   // 注意：必须先确认文件真实存在再返回，否则 /api/health 这类路由会被这里吞成 404
   if (req.method === 'GET' || req.method === 'HEAD') {
-    // 后台管理页：/admin 直接映射到 结果/admin.html
-    var adminPath = (req.url || '').split('?')[0].split('#')[0];
-    if (adminPath === '/admin') {
-      sendFile(res, path.join(PUBLIC_DIR, 'admin.html'), 200);
+    // 无扩展名的友好地址 → publish 目录下的静态文件（与 netlify.toml 的 [[redirects]] 一一对应，
+    // 两边必须同时改，否则本地能开、线上 404（或反之）。
+    // Pretty URLs 在 Netlify 上是关掉的，所以线上不能靠 /xxx/ 目录式地址，只能走重定向。
+    var cleanPath = (req.url || '').split('?')[0].split('#')[0];
+    if (STATIC_ROUTES[cleanPath]) {
+      sendFile(res, path.join(PUBLIC_DIR, STATIC_ROUTES[cleanPath]), 200);
       return;
     }
 

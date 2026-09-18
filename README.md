@@ -84,6 +84,7 @@ pingze/
 │   ├── auth.js                # 前端认证与数据层：登录、历史、作品、配额、升级引导
 │   ├── admin.js               # 后台逻辑：管理员登录校验 + 用户表渲染 + 改等级
 │   ├── supabase-config.example.js  # 前端配置模板（复制为 supabase-config.js 后填真实值）
+│   ├── baidu_verify_codeva-kWwbuP7hWC.html  # 百度站长平台站点归属验证文件，**文件名与内容不可改动**
 │   └── 二维码.jpg             # 会员付费引导二维码
 ├── lib/                       # 本地后端与 Serverless 函数共用的服务端逻辑
 │   ├── supabase-store.js      # 缓存 / 配额 / 流水 / 身份校验
@@ -211,6 +212,26 @@ command = "node scripts/gen-supabase-config.js"
 > **函数超时**：Netlify 免费版硬上限 10 秒，而 DeepSeek 长文本推理容易超过。
 > 建议单次提交控制在 40 字以内；Pro 套餐可把 `netlify.toml` 里的 `[functions.<name>] timeout` 提到 26。
 > 注意 `functions.timeout` 必须是**逐函数声明的对象**，写成标量会导致 Netlify 拒绝部署。
+
+### ⚠️ 站点设置必须关闭 Pretty URLs
+
+本站的 **Site settings → Build & deploy → Post processing → Pretty URLs 必须保持关闭**
+（API 里的 `processing_settings.html.pretty_urls = false`）。
+
+开启时 Netlify 会为每个 `.html` 生成 301：把 `/foo.html` 重定向到 **小写且去掉扩展名**的
+`/foo`。这对站点验证文件是致命的——`结果/baidu_verify_codeva-kWwbuP7hWC.html` 会先被 301 到
+`/baidu_verify_codeva-kwwbup7hwc`，百度/Google 的校验就会失败（它们要求目标 URL 首次请求即返回 200）。
+
+判据与自检（不跟随重定向，看首次响应的状态码）：
+
+```bash
+curl -sS -o /dev/null -w "%{http_code} %{redirect_url}\n" \
+  "https://pingze.site/baidu_verify_codeva-kWwbuP7hWC.html"
+# 期望：200 且 redirect_url 为空
+```
+
+> 该设置是**站点级**的，不能写进 `netlify.toml`，因此改动它之后**必须重新部署**才会生效
+> （301 规则是部署处理阶段固化进 CDN 的）；本仓库里看不出来，只能通过 API 或控制台确认。
 
 ---
 

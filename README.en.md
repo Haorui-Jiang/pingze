@@ -232,6 +232,13 @@ Set the following variables under the site's **Site settings → Environment var
 
 **Routing**: `netlify.toml` rewrites `/api/*` to `/.netlify/functions/:splat` and `/admin` to `/admin.html`.
 
+> **Do not enable GitHub Pages.** Netlify at <https://pingze.site> is the only deployment target.
+> The repository root is *not* the site root (the site lives in `结果/`, set by `netlify.toml`'s `publish`),
+> so Pages would only publish the raw sources and serve `https://haorui-jiang.github.io/pingze/` as a
+> **404 dead link**. Worse, while Pages is enabled **every push creates a `github-pages` deployment record**
+> (plus a matching environment), cluttering the repository's Deployments page. Keep Pages disabled
+> (`GET /repos/{owner}/{repo}/pages` must return 404); see the Chinese README for the cleanup commands.
+
 > **Function timeout**: the free Netlify tier caps functions at 10 seconds, which long DeepSeek inferences
 > easily exceed. Keep single submissions under ~40 characters. On a Pro plan you can raise
 > `[functions.<name>] timeout` in `netlify.toml` to 26.

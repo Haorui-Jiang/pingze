@@ -246,6 +246,30 @@ curl -sS -o /dev/null -w "%{http_code} %{redirect_url}\n" \
 > 该设置是**站点级**的，不能写进 `netlify.toml`，因此改动它之后**必须重新部署**才会生效
 > （301 规则是部署处理阶段固化进 CDN 的）；本仓库里看不出来，只能通过 API 或控制台确认。
 
+### ⚠️ 不要启用 GitHub Pages
+
+本仓库**唯一**的部署入口是 Netlify（<https://pingze.site>）。**GitHub Pages 必须保持关闭**
+（Settings → Pages → Source 选 `None`；API 上 `GET /repos/{owner}/{repo}/pages` 应返回 404）。
+
+两个理由：
+
+1. 仓库根目录**不是**站点根——站点在 `结果/`，由 `netlify.toml` 的 `publish` 指定。启用 Pages
+   只会把仓库源文件当静态站发布，得到 `https://haorui-jiang.github.io/pingze/` 这样的 **404 死链**。
+2. 更实际的影响：Pages 开启时**每次 push 都会生成一条 `github-pages` deployment 记录**
+   （并自动创建同名 environment），把仓库的 Deployments 页刷满无用条目。
+
+关闭方式（一次性）：
+
+```bash
+REPO=repos/Haorui-Jiang/pingze
+gh api --method DELETE $REPO/pages                     # 关闭 Pages（204）
+gh api --method DELETE $REPO/environments/github-pages  # 清掉遗留的环境壳（204）
+```
+
+> 清理历史 deployment 记录时，删除**处于活动状态**的会返回 **422**
+> （`We cannot delete an active deployment unless it is the only deployment in a given environment.`），
+> 需先 `POST /repos/{owner}/{repo}/deployments/{id}/statuses` 补一条 `state=inactive` 再删。
+
 ---
 
 ## 🔐 密钥与安全

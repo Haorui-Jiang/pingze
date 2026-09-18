@@ -80,6 +80,7 @@
 pingze/
 ├── 结果/                      # 静态站点发布目录（netlify.toml 里 publish = "结果"）
 │   ├── index.html             # 首页：分析界面 + 登录/注册弹层 + 历史/作品面板 + 付费二维码弹层
+│   │                          #   　<head> 内含百度站点验证 meta（见「站点验证」小节）
 │   ├── admin.html             # 管理后台页面（/admin）
 │   ├── auth.js                # 前端认证与数据层：登录、历史、作品、配额、升级引导
 │   ├── admin.js               # 后台逻辑：管理员登录校验 + 用户表渲染 + 改等级
@@ -212,6 +213,18 @@ command = "node scripts/gen-supabase-config.js"
 > **函数超时**：Netlify 免费版硬上限 10 秒，而 DeepSeek 长文本推理容易超过。
 > 建议单次提交控制在 40 字以内；Pro 套餐可把 `netlify.toml` 里的 `[functions.<name>] timeout` 提到 26。
 > 注意 `functions.timeout` 必须是**逐函数声明的对象**，写成标量会导致 Netlify 拒绝部署。
+
+### 🔎 百度站点验证（两种方式并存，互为备用）
+
+同一份归属校验在仓库里放了两处，任一生效即可通过；**两处的值必须一致**，改一个就改两个：
+
+| 方式 | 位置 | 要点 |
+|---|---|---|
+| 验证文件 | `结果/baidu_verify_codeva-kWwbuP7hWC.html` | 32 字节、内容 `5ab6be3597ff14b21e61a2800ef9ca39`、**无结尾换行**；文件名与内容一字不能改 |
+| meta 标签 | `结果/index.html` 的 `<head>` 内 | `<meta name="baidu-site-verification" content="codeva-kWwbuP7hWC" />` |
+
+自检：`node tools/check-domain.js` 的【3/4】段会同时断言「文件首次请求即 200 且内容一致」与
+「首页 `<head>` 内含该 meta」。
 
 ### ⚠️ 站点设置必须关闭 Pretty URLs
 

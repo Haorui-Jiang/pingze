@@ -4,6 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>平仄查询站 · 管理后台</title>
+  <!-- 后台页禁止收录：robots.txt 只是「请求」，只有 meta 才是硬拒绝。
+       同理 /admin 这个友好地址也是同一份 HTML，这里加一次即可覆盖两种入口。 -->
+  <meta name="robots" content="noindex,nofollow" />
   <style>
     :root {
       --bg: #f5f7fa; --panel: #ffffff; --line: #e2e8f0; --text: #1e293b;

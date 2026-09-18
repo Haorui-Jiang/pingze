@@ -137,7 +137,7 @@ function extractJSON(s) {
   }
 }
 
-/** 取客户端 IP：本地直连没有反代头，Netlify / Railway 走 x-forwarded-for */
+/** 取客户端 IP：本地直连没有反代头，Netlify 等平台走 x-forwarded-for */
 function clientIp(req) {
   const xf = req.headers['x-forwarded-for'];
   if (xf) return String(xf).split(',')[0].trim();

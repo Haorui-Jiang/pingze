@@ -12,7 +12,7 @@
 > 用 **DeepSeek 大模型实时推断**替代传统逐字字典查表，能处理字典收不到的多音字与变格。
 > 参考网站：`http://www.zhgc.com/pz/pz.asp`
 
-**在线体验**：<https://pingze.site/>
+**在线体验**：<https://www.pingze.site/>
 
 ---
 
@@ -257,7 +257,7 @@ command = "node scripts/gen-supabase-config.js"
 
 ```bash
 curl -sS -o /dev/null -w "%{http_code} redirect=[%{redirect_url}]\n" \
-  "https://pingze.site/baidu_verify_codeva-W1T8O1gd3p.html"
+  "https://www.pingze.site/baidu_verify_codeva-W1T8O1gd3p.html"
 # 期望：200 redirect=[]
 ```
 
@@ -279,7 +279,7 @@ curl -sS -o /dev/null -w "%{http_code} redirect=[%{redirect_url}]\n" \
 
 ```bash
 curl -sS -o /dev/null -w "%{http_code} %{redirect_url}\n" \
-  "https://pingze.site/baidu_verify_codeva-W1T8O1gd3p.html"
+  "https://www.pingze.site/baidu_verify_codeva-W1T8O1gd3p.html"
 # 期望：200 且 redirect_url 为空
 ```
 
@@ -288,7 +288,7 @@ curl -sS -o /dev/null -w "%{http_code} %{redirect_url}\n" \
 
 ### ⚠️ 不要启用 GitHub Pages
 
-本仓库**唯一**的部署入口是 Netlify（<https://pingze.site>）。**GitHub Pages 必须保持关闭**
+本仓库**唯一**的部署入口是 Netlify（<https://www.pingze.site>）。**GitHub Pages 必须保持关闭**
 （Settings → Pages → Source 选 `None`；API 上 `GET /repos/{owner}/{repo}/pages` 应返回 404）。
 
 两个理由：

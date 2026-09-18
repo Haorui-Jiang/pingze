@@ -14,7 +14,7 @@
 > so it also handles polyphonic characters and irregular variants a static dictionary misses.
 > Reference site: `http://www.zhgc.com/pz/pz.asp`
 
-**Live demo**: <https://pingze.site/>
+**Live demo**: <https://www.pingze.site/>
 
 ---
 
@@ -232,7 +232,7 @@ Set the following variables under the site's **Site settings → Environment var
 
 **Routing**: `netlify.toml` rewrites `/api/*` to `/.netlify/functions/:splat` and `/admin` to `/admin.html`.
 
-> **Do not enable GitHub Pages.** Netlify at <https://pingze.site> is the only deployment target.
+> **Do not enable GitHub Pages.** Netlify at <https://www.pingze.site> is the only deployment target.
 > The repository root is *not* the site root (the site lives in `结果/`, set by `netlify.toml`'s `publish`),
 > so Pages would only publish the raw sources and serve `https://haorui-jiang.github.io/pingze/` as a
 > **404 dead link**. Worse, while Pages is enabled **every push creates a `github-pages` deployment record**

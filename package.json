@@ -1,0 +1,13 @@
+{
+  "name": "pingze-query",
+  "version": "1.0.0",
+  "description": "平仄格律查询站 · DeepSeek 驱动，含账号体系、分析历史、我的作品、会员配额与管理后台（本地 / Netlify 部署）",
+  "private": true,
+  "scripts": {
+    "start": "node server.local.js",
+    "dev": "node --watch server.local.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

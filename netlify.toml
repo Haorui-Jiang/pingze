@@ -1,0 +1,37 @@
+[build]
+  # 静态站点根目录（含 index.html 等前端资源）
+  publish = "结果"
+  # Netlify Function 所在目录
+  functions = "netlify/functions"
+  # 本站为纯静态 + Serverless 函数，无构建步骤；显式声明避免被框架自动探测干扰
+  command = "echo 'Static site, no build step'"
+
+[build.environment]
+  # 函数运行时的 Node 版本（fetch 为 Node 18+ 内置，无需任何 npm 依赖）
+  NODE_VERSION = "20"
+
+# 函数超时（秒）。免费版硬上限 10s；Pro 及以上可到 26s。
+# 注意：`functions.timeout` 必须是「每个函数一项」的对象，不能写成标量，
+# 否则 Netlify 解析 netlify.toml 时会直接报
+# "Configuration property functions.timeout must be an object" 而拒绝部署。
+[functions.analyze]
+  timeout = 10
+[functions.register]
+  timeout = 10
+[functions.admin-users]
+  timeout = 10
+[functions.admin-set-tier]
+  timeout = 10
+
+# 将前端请求的 /api/analyze 映射到 Serverless 函数 analyze
+# 实际调用路径：/.netlify/functions/analyze
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+
+# 后台管理页：/admin 映射到静态文件 admin.html（publish 目录下）
+[[redirects]]
+  from = "/admin"
+  to = "/admin.html"
+  status = 200

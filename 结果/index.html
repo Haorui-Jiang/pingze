@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>平仄格律查询 · DeepSeek</title>
+<style>
+  :root {
+    --ink: #2b2b2b;
+    --ink-soft: #5a534b;
+    --seal: #9e2f2f;
+    --seal-soft: #c0564f;
+    --paper: #f5efe3;
+    --paper-2: #efe7d6;
+    --line: #d8cdb8;
+    --gold: #b08d3e;
+    --ping: #2f7d56;
+    --ze: #a4322c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "KaiTi", "STKaiti", "楷体", "Songti SC", serif;
+    background:
+      radial-gradient(circle at 20% 10%, rgba(158,47,47,0.05), transparent 40%),
+      radial-gradient(circle at 80% 90%, rgba(176,141,62,0.06), transparent 40%),
+      linear-gradient(135deg, var(--paper), var(--paper-2));
+    color: var(--ink);
+    min-height: 100vh;
+    line-height: 1.8;
+    padding: 32px 16px 64px;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; }
+
+  header { text-align: center; margin-bottom: 28px; }
+  header .seal {
+    display: inline-block; font-size: 13px; letter-spacing: 4px;
+    color: #fff; background: var(--seal); padding: 4px 14px;
+    border-radius: 4px; transform: rotate(-2deg);
+    box-shadow: 0 2px 8px rgba(158,47,47,0.25);
+  }
+  header h1 {
+    font-size: 40px; letter-spacing: 10px; margin: 14px 0 6px;
+    font-weight: 700; color: var(--ink);
+    text-shadow: 0 2px 0 rgba(255,255,255,0.6);
+  }
+  header .sub { color: var(--ink-soft); font-size: 15px; letter-spacing: 2px; }
+
+  .card {
+    background: rgba(255,253,248,0.82);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 26px 28px;
+    margin-bottom: 22px;
+    box-shadow: 0 8px 30px rgba(120,100,70,0.10);
+    backdrop-filter: blur(6px);
+  }
+  .card h2 {
+    font-size: 19px; letter-spacing: 3px; color: var(--seal);
+    margin-bottom: 16px; display: flex; align-items: center; gap: 10px;
+  }
+  .card h2::before {
+    content: "❖"; font-size: 14px; color: var(--gold);
+  }
+
+  label { display: block; font-size: 14px; color: var(--ink-soft); margin-bottom: 8px; letter-spacing: 1px; }
+  textarea, select, input {
+    width: 100%; font-family: inherit; font-size: 16px; color: var(--ink);
+    background: #fffdf8; border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px 14px; outline: none; transition: border-color .2s, box-shadow .2s;
+  }
+  textarea { min-height: 150px; resize: vertical; line-height: 1.9; letter-spacing: 1px; }
+  textarea:focus, select:focus, input:focus { border-color: var(--seal-soft); box-shadow: 0 0 0 3px rgba(192,86,79,0.12); }
+
+  .row { display: flex; gap: 14px; flex-wrap: wrap; }
+  .row > * { flex: 1; min-width: 200px; }
+
+  .act-bar {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    margin-top: 16px;
+  }
+  .act-bar .hint { margin-top: 0; }
+
+  /* 输入字数提示：超过安全长度时转为警示色，提醒用户可能超时 */
+  .len-hint { margin-left: auto; }
+  .len-hint.len-warn { color: var(--seal); font-weight: 600; }
+
+  .btn {
+    font-family: inherit; font-size: 17px; letter-spacing: 4px;
+    color: #fff; background: linear-gradient(135deg, var(--seal), var(--seal-soft));
+    border: none; border-radius: 10px; padding: 14px 28px; cursor: pointer;
+    transition: transform .15s, box-shadow .15s, opacity .15s;
+    box-shadow: 0 6px 18px rgba(158,47,47,0.28);
+  }
+  .btn:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(158,47,47,0.34); }
+  .btn:disabled { opacity: .55; cursor: not-allowed; transform: none; box-shadow: none; }
+
+  .hint { font-size: 13px; color: var(--ink-soft); margin-top: 10px; }
+  .hint code { background: var(--paper-2); padding: 1px 6px; border-radius: 4px; font-family: monospace; }
+
+  /* 结果区 */
+  #result { display: none; }
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap: 12px; margin: 6px 0 18px; }
+  .meta {
+    background: #fffdf8; border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 16px; text-align: center;
+  }
+  .meta .k { font-size: 12px; color: var(--ink-soft); letter-spacing: 2px; }
+  .meta .v { font-size: 22px; color: var(--seal); margin-top: 6px; letter-spacing: 2px; }
+
+  .grid-title { font-size: 15px; color: var(--ink-soft); letter-spacing: 2px; margin: 8px 0 12px; }
+  .pz-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+  .pz-cell {
+    width: 56px; height: 56px; border-radius: 8px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    border: 1px solid var(--line); background: #fffdf8;
+    transition: transform .12s;
+  }
+  .pz-cell:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(120,100,70,0.14); }
+  .pz-cell .ch { font-size: 24px; line-height: 1; }
+  .pz-cell .tone { font-size: 12px; margin-top: 4px; letter-spacing: 1px; }
+  .pz-cell.ping { color: var(--ping); border-color: rgba(47,125,86,0.4); }
+  .pz-cell.ze  { color: var(--ze); }
+  .pz-cell.flag { color: var(--gold); }
+  .pz-cell .punct { color: var(--ink-soft); }
+
+  .yunbu { font-size: 15px; line-height: 2; color: var(--ink); }
+  .yunbu b { color: var(--seal); }
+
+  .note {
+    margin-top: 14px; padding: 14px 16px; border-left: 3px solid var(--seal);
+    background: var(--paper-2); border-radius: 0 8px 8px 0; font-size: 15px;
+  }
+
+  .copy-bar { display: flex; gap: 10px; align-items: center; margin-top: 16px; flex-wrap: wrap; }
+  .copy-bar textarea {
+    flex: 1; min-height: 38px; font-size: 13px; font-family: monospace;
+    color: var(--ink-soft); padding: 8px 10px;
+  }
+  .mini-btn {
+    font-family: inherit; font-size: 14px; letter-spacing: 2px; color: var(--seal);
+    background: #fffdf8; border: 1px solid var(--seal-soft); border-radius: 8px;
+    padding: 8px 18px; cursor: pointer; transition: background .15s;
+  }
+  .mini-btn:hover { background: rgba(192,86,79,0.10); }
+
+  /* 「保存为作品」：结果窗口里的主操作，做明显一点 */
+  .mini-btn.save-btn {
+    color: #fff; background: linear-gradient(135deg, var(--seal), var(--seal-soft));
+    border-color: transparent; font-weight: 600;
+    padding: 9px 20px; box-shadow: 0 4px 12px rgba(158,47,47,0.22);
+  }
+  .mini-btn.save-btn:hover { background: linear-gradient(135deg, var(--seal-soft), var(--seal)); }
+  #saveTip { display: block; }
+  #saveTip.ok { color: var(--seal); }
+
+  .err {
+    border: 1px solid var(--ze); background: #fbeae9; color: var(--ze);
+    border-radius: 10px; padding: 16px 18px; font-size: 15px;
+  }
+  .err b { letter-spacing: 1px; }
+
+  .loading { text-align: center; color: var(--ink-soft); padding: 30px; letter-spacing: 2px; }
+  .loading .dots::after { content: "·"; animation: dots 1.2s steps(4) infinite; }
+  @keyframes dots { 0%{content:"";} 25%{content:"·";} 50%{content:"··";} 75%{content:"···";} 100%{content:"····";} }
+  .spinner {
+    width: 26px; height: 26px; margin: 0 auto 14px;
+    border: 3px solid var(--line); border-top-color: var(--seal);
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .progress-text { font-size: 16px; letter-spacing: 2px; color: var(--seal); }
+
+  footer { text-align: center; color: var(--ink-soft); font-size: 13px; letter-spacing: 1px; margin-top: 8px; }
+  footer code { font-family: monospace; }
+
+  /* ---------- 账号系统 ---------- */
+  .userbar {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    margin-bottom: 18px; padding: 12px 16px;
+    background: rgba(255,253,248,0.82); border: 1px solid var(--line); border-radius: 12px;
+  }
+  .userbar .user-info { flex: 1; min-width: 180px; font-size: 14px; color: var(--ink-soft); letter-spacing: 1px; }
+  .userbar .quota { font-size: 12.5px; color: var(--gold); letter-spacing: 1px; }
+
+  .auth-disabled {
+    margin: 0 0 18px; padding: 12px 16px; border-radius: 10px;
+    border: 1px dashed var(--seal-soft); background: #fdf6f4;
+    color: var(--seal); font-size: 13.5px;
+  }
+  .auth-disabled code { background: var(--paper-2); padding: 1px 5px; border-radius: 4px; font-family: monospace; }
+
+  .modal-mask {
+    position: fixed; top: 0; right: 0; bottom: 0; left: 0;
+    background: rgba(35,34,31,0.45); display: none;
+    align-items: center; justify-content: center; z-index: 50; padding: 16px;
+  }
+  .modal {
+    width: 100%; max-width: 380px; padding: 22px 24px;
+    background: #fffdf8; border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: 0 18px 50px rgba(60,45,30,0.28);
+  }
+  .modal h3 { margin: 0 0 14px; font-size: 18px; letter-spacing: 3px; color: var(--seal); font-weight: 600; }
+  .modal input { margin-bottom: 10px; }
+  .modal .btn { width: 100%; margin-bottom: 12px; letter-spacing: 6px; padding: 12px 20px; }
+  .modal-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .err-tip { color: var(--ze); }
+
+  .hist-item {
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+    margin-bottom: 10px; background: #fffdf8; cursor: pointer;
+    transition: transform .12s, box-shadow .12s;
+  }
+  .hist-item:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(120,100,70,0.14); }
+  .hist-meta { font-size: 12px; color: var(--ink-soft); letter-spacing: 1px; }
+  .hist-text { font-size: 15px; margin: 6px 0 8px; letter-spacing: 1px; white-space: pre-wrap; word-break: break-word; }
+  .hist-tags { display: flex; gap: 12px; font-size: 12px; }
+  .tone-ping { color: var(--ping); }
+  .tone-ze   { color: var(--ze); }
+  .tone-tong { color: var(--gold); }
+
+  /* 我的作品 */
+  .work-item {
+    display: flex; align-items: flex-start; gap: 12px;
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+    margin-bottom: 10px; background: #fffdf8;
+    transition: transform .12s, box-shadow .12s;
+  }
+  .work-item:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(120,100,70,0.14); }
+  .work-main { flex: 1; cursor: pointer; min-width: 0; }
+  .work-title { font-size: 16px; color: var(--ink); letter-spacing: 1px; }
+  .work-form { font-size: 12px; color: var(--seal-soft); margin-left: 4px; }
+  .work-text { font-size: 14px; color: var(--ink-soft); margin: 4px 0 6px; letter-spacing: 1px;
+    white-space: pre-wrap; word-break: break-word; }
+  .work-actions { display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
+  .work-actions .mini-btn { white-space: nowrap; }
+  .modal label { margin-top: 6px; }
+  .modal textarea { min-height: 150px; resize: vertical; }
+
+  /* 会员升级 / 二维码引导弹层 */
+  .modal .qr-box { text-align: center; }
+  .modal .qr-box img {
+    width: 232px; height: 232px; display: block; margin: 4px auto 12px;
+    border: 1px solid var(--line); border-radius: 12px; background: #fff; padding: 6px;
+  }
+  .modal .qr-box .qr-step { font-size: 14px; color: var(--ink-soft); line-height: 1.9; text-align: left; }
+  .modal .qr-box .qr-step b { color: var(--seal); }
+  .modal .qr-price {
+    display: inline-block; margin: 2px 0 10px; padding: 5px 14px; border-radius: 999px;
+    background: rgba(176, 58, 46, 0.08); color: var(--seal); font-size: 13px; letter-spacing: 1px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>平仄格律查询</h1>
+    <div class="sub">DeepSeek-V4.1-Flash · 逐字标注 · 文体判定 · 韵部溯源</div>
+  </header>
+
+  <div class="userbar">
+    <span class="user-info" id="userInfo">未登录</span>
+    <span class="quota" id="quotaInfo"></span>
+    <button class="mini-btn" id="btnAuth">登录 / 注册</button>
+    <button class="mini-btn" id="btnHistory" style="display:none">我的分析</button>
+    <button class="mini-btn" id="btnWorks" style="display:none">我的作品</button>
+    <button class="mini-btn" id="btnLogout" style="display:none">退出</button>
+  </div>
+
+  <p class="auth-disabled" id="authDisabledTip" style="display:none">
+    账号功能未启用：请复制 <code>supabase-config.example.js</code> 为 <code>supabase-config.js</code>，
+    填入 Supabase 的 Project URL 与 anon key。
+  </p>
+
+  <div class="card">
+    <h2>录入</h2>
+    <label>诗词 / 对联文本</label>
+    <textarea id="poem" oninput="updateLenHint()" placeholder="在此粘贴你的诗句，例如：&#10;白日依山尽，黄河入海流。&#10;欲穷千里目，更上一层楼。"></textarea>
+    <div class="act-bar">
+      <button class="btn" id="go" onclick="analyze()">分　析</button>
+      <span class="hint" style="margin-top:0">模型 <code>DeepSeek-V4.1-Flash</code> · 密钥由服务端配置，无需输入</span>
+      <span class="hint len-hint" id="lenHint"></span>
+    </div>
+  </div>
+
+  <div id="progressBox" class="loading" style="display:none">
+    <div class="spinner"></div>
+    <div class="progress-text" id="progressText"></div>
+  </div>
+
+  <div id="result" class="card" style="display:none">
+    <h2>格律分析</h2>
+    <div class="meta-grid" id="metaGrid"></div>
+
+    <div class="grid-title">逐字平仄</div>
+    <div class="pz-grid" id="pzGrid"></div>
+
+    <div class="grid-title">韵部溯源</div>
+    <div class="yunbu" id="yunbu"></div>
+
+    <div class="note" id="note"></div>
+
+    <div class="copy-bar">
+      <textarea id="copyText" readonly></textarea>
+      <button class="mini-btn" id="btnCopy" onclick="copyResult()">复制全部</button>
+      <button class="mini-btn save-btn" id="btnSavePoem" style="display:none" title="把这首次分析存入「我的作品」，可随时编辑或删除">☆ 保存为作品</button>
+    </div>
+    <span class="hint" id="saveTip"></span>
+  </div>
+
+  <div id="errorBox"></div>
+
+  <div class="card" id="historyCard" style="display:none">
+    <h2>我的分析</h2>
+    <div id="historyList"></div>
+  </div>
+
+  <div class="card" id="worksCard" style="display:none">
+    <h2>我的作品</h2>
+    <div id="worksList"></div>
+  </div>
+
+  <footer>
+    仿 <code>www.zhgc.com/pz/pz.asp</code> 功能 · 以大模型替代逐字字典查表
+  </footer>
+
+  <div class="modal-mask" id="authModal">
+    <div class="modal">
+      <h3 id="authTitle">登录</h3>
+      <p class="hint" id="authQuotaNote">登录后每日可分析 10 次，缓存命中不计费</p>
+      <input id="authEmail" type="email" placeholder="邮箱" autocomplete="email">
+      <input id="authPassword" type="password" placeholder="密码（至少 8 位，含字母和数字）" autocomplete="current-password">
+      <p class="hint" id="authTip"></p>
+      <button class="btn" id="authSubmit">登　录</button>
+      <div class="modal-actions">
+        <button class="mini-btn" id="authSwitch">没有账号？去注册</button>
+        <button class="mini-btn" id="authClose">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-mask" id="worksModal">
+    <div class="modal">
+      <h3>编辑作品</h3>
+      <label>标题（留空则取首句）</label>
+      <input id="workEditTitle" type="text" placeholder="标题" maxlength="60">
+      <label>正文</label>
+      <textarea id="workEditBody" placeholder="在此修改诗词 / 对联正文"></textarea>
+      <label>文体（选填）</label>
+      <input id="workEditForm" type="text" placeholder="如：五言绝句 / 七律 / 对联">
+      <p class="hint" id="workEditTip"></p>
+      <button class="btn" id="workEditSave">保　存</button>
+      <div class="modal-actions">
+        <button class="mini-btn" id="workEditCancel">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-mask" id="qrModal">
+    <div class="modal">
+      <h3 id="qrTitle">开通会员</h3>
+      <p class="hint" id="qrSub">免费用户每天可分析 1 次，会员每天 10 次</p>
+      <div class="qr-box">
+        <span class="qr-price">会员 ¥1 / 天 · 按月计费（30 天 ¥30）</span>
+        <img src="二维码.jpg" alt="运营人微信二维码">
+        <div class="qr-step">
+          ① 长按 / 截图后用<b>微信扫一扫</b>识别二维码<br>
+          ② 添加网站运营人，说明「<b>开通会员</b>」<br>
+          ③ 付款并与运营人确认后，由运营人在后台为你开通<br>
+          ④ 开通后<b>刷新本页</b>，即可享受每日 10 次分析
+        </div>
+      </div>
+      <p class="hint" id="qrTip"></p>
+      <div class="modal-actions" style="justify-content:center">
+        <button class="mini-btn" id="qrClose">暂不开通</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+async function analyze() {
+  // 读取输入文本时删除所有换行与空格字符（含全角空格 \u3000），便于逐字平仄分析
+  const text = document.getElementById('poem').value.replace(/[\s\u3000]/g, '');
+  // 把清理后的文本写回输入框，让用户看到实际送分析的内容
+  document.getElementById('poem').value = text;
+  const btn = document.getElementById('go');
+  const errBox = document.getElementById('errorBox');
+  const resBox = document.getElementById('result');
+
+  errBox.innerHTML = '';
+  if (!text.trim()) {
+    showError('请先在上方粘贴要分析的诗词文本。');
+    return;
+  }
+  // 未登录不许分析：这里拦是为了体验，真正的强制在后端 /api/analyze
+  if (window.PingzeAuth && !(await window.PingzeAuth.requireLogin())) {
+    btn.disabled = false;
+    return;
+  }
+  // 免费用户第 2 次分析：弹出二维码引导开通会员（体验层拦截；超额后端仍会 429）
+  if (window.PingzeAuth && typeof window.PingzeAuth.shouldBlockForUpgrade === 'function'
+      && (await window.PingzeAuth.shouldBlockForUpgrade())) {
+    btn.disabled = false;
+    return;
+  }
+  btn.disabled = true;
+  const old = btn.textContent;
+  btn.textContent = '分析中…';
+  startProgress();
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 56000);
+    // 带上 Supabase 的 JWT，后端据此识别用户、计配额、写历史
+    const headers = { 'Content-Type': 'application/json' };
+    let poemId = null;
+    if (window.PingzeAuth) {
+      Object.assign(headers, await window.PingzeAuth.authHeaders());
+      poemId = window.PingzeAuth.getPoemId();
+    }
+    const r = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify(poemId ? { text: text, poemId: poemId } : { text: text }),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    const raw = await r.text();
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      stopProgress();
+      showError('服务端没有返回有效结果：调用超时被中断（免费版单次上限 10 秒），或返回内容被网关截断。长文本最容易触发。请把文本分成 20～40 字的小段重试；若短句也持续失败，请检查服务器出网与 DeepSeek 配置。');
+      return;
+    }
+    stopProgress();
+    // 会话过期等情况下后端会返回 401，直接把登录框弹出来，比显示一句报错有用
+    if (r.status === 401 || data.needLogin) {
+      if (window.PingzeAuth) {
+        await window.PingzeAuth.refresh();
+        window.PingzeAuth.openLogin();
+      }
+      showError(data.error || '登录状态已失效，请重新登录。');
+      return;
+    }
+    if (data.error) {
+      showError(data.error);
+      // 免费用户额度用尽：顺便把开通会员的二维码弹出来，别让用户卡死在这一步
+      if (data.needUpgrade && window.PingzeAuth && window.PingzeAuth.openUpgradeQr) {
+        window.PingzeAuth.openUpgradeQr(
+          '开通会员',
+          '今日免费额度已用尽；会员每天可分析 10 次',
+          '支付后请联系运营人开通，开通后刷新本页即可。'
+        );
+      }
+      return;
+    }
+    // 结果结构校验：后端被平台超时强杀、或返回体被网关截断时，
+    // 有时仍会给出一个「合法 JSON 但没有 chars」的对象（例如 {} 或 {"detail":"..."}）。
+    // 若不校验就直接 render，页面会显示成「文体 —、总字数 0、平/仄 0/0」的空白结果，
+    // 让用户误以为分析成功。这里必须当作失败处理。
+    if (!isRenderableResult(data)) {
+      showError(
+        '未能取得有效的分析结果（返回内容缺少逐字平仄数据）。' +
+        '常见原因：DeepSeek 调用耗时超过服务器限制被中断，长文本尤其容易触发。' +
+        '请缩短文本后重试，或稍后再试。'
+      );
+      return;
+    }
+    render(data);
+    if (window.PingzeAuth) window.PingzeAuth.onAnalysisDone(text, data);
+  } catch (e) {
+    stopProgress();
+    if (e && e.name === 'AbortError') {
+      showError('请求超时：服务器在 10 秒内没能返回结果（免费版单次上限）。这是长文本最常见的问题——模型每首都要花大量推理时间。建议把文本分成 20～40 字的小段分次分析，短句通常几秒内就能出结果。');
+    } else {
+      showError('调用失败：' + e.message);
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = old;
+  }
+}
+
+function showError(msg) {
+  document.getElementById('result').style.display = 'none';
+  document.getElementById('errorBox').innerHTML =
+    '<div class="err"><b>分析未完成</b><br>' + msg + '</div>';
+}
+
+// 过滤掉 char 为空白的占位条目（空格 / 换行 / 全角空格 / 空串）。
+// 这类条目来自模型的「空格也占一位」输出，直接渲染会出现「空字符 + 符」的空格子。
+// 后端已做归一化，这里再兜一层，保证历史记录 / 老缓存也能正常显示。
+function visibleChars(d) {
+  return (d && Array.isArray(d.chars) ? d.chars : []).filter(
+    c => c && String(c.char == null ? '' : c.char).replace(/[\s\u3000]/g, '') !== ''
+  );
+}
+
+/**
+ * 一个响应是否「值得渲染」。
+ *
+ * 存在的意义：区分「模型确实没标出任何字」与「这次调用其实失败了」。
+ * 后者若被当成成功结果渲染，界面会出现文体 —、总字数 0、平/仄 0/0 的假成功，
+ * 用户完全无法察觉问题。凡是解析出来的对象里 chars 不是非空数组，一律判为失败。
+ */
+function isRenderableResult(d) {
+  if (!d || typeof d !== 'object') return false;
+  if (d.error) return false;
+  if (!Array.isArray(d.chars)) return false;
+  return visibleChars(d).length > 0;
+}
+
+function render(d) {
+  // 第二道防线：任何调用方（含 auth.js 的历史记录回放）传入无效结果时，
+  // 绝不能把面板渲染成「文体 —、总字数 0」的假成功。
+  if (!isRenderableResult(d)) {
+    showError(
+      '这条记录没有可显示的分析结果（可能生成时调用被中断）。' +
+      (d && d.error ? '原因：' + d.error : '请重新分析该文本。')
+    );
+    return;
+  }
+  document.getElementById('errorBox').innerHTML = '';
+  const res = document.getElementById('result');
+  res.style.display = 'block';
+
+  const chars = visibleChars(d);
+
+  // 元信息卡
+  const meta = document.getElementById('metaGrid');
+  meta.innerHTML = `
+    <div class="meta"><div class="k">文　体</div><div class="v">${esc(d.form || '—')}</div></div>
+    <div class="meta"><div class="k">总字数</div><div class="v">${chars.length}</div></div>
+    <div class="meta"><div class="k">平 / 仄</div><div class="v">${countTone(chars,'平')} / ${countTone(chars,'仄')}</div></div>
+  `;
+
+  // 逐字平仄网格
+  const grid = document.getElementById('pzGrid');
+  grid.innerHTML = chars.map(c => {
+    const t = c.tone;
+    const cls = t === '平' ? 'ping' : t === '仄' ? 'ze' : (t === '—' ? 'punct' : 'flag');
+    const label = t === '—' ? '符' : (t === '通' ? '通' : t);
+    return `<div class="pz-cell ${cls}"><div class="ch">${esc(c.char)}</div><div class="tone">${label}</div></div>`;
+  }).join('');
+
+  // 韵部
+  document.getElementById('yunbu').innerHTML =
+    '<b>所属韵部：</b>' + (d.yunbu && d.yunbu.length ? d.yunbu.join('、') : '—');
+
+  // 点评
+  document.getElementById('note').textContent = '格律点评：' + (d.note || '—');
+
+  // 复制文本
+  document.getElementById('copyText').value = buildCopy(d);
+}
+
+// 供 auth.js 复用同一套渲染逻辑（点击历史记录时回放结果）
+window.renderResult = render;
+
+function countTone(chars, t) {
+  return (chars || []).filter(c => c.tone === t).length;
+}
+
+function buildCopy(d) {
+  const lines = ['【逐字平仄】'];
+  visibleChars(d).forEach(c => {
+    lines.push(`${c.char}（${c.tone}）`);
+  });
+  lines.push('【文体】' + (d.form || '—'));
+  lines.push('【韵部】' + (d.yunbu && d.yunbu.length ? d.yunbu.join('、') : '—'));
+  lines.push('【点评】' + (d.note || '—'));
+  return lines.join('\n');
+}
+
+function copyResult() {
+  const t = document.getElementById('copyText').value;
+  navigator.clipboard.writeText(t).then(() => {
+    // 必须按 id 取：页面上已有多处 .mini-btn，用 querySelector 会取错按钮
+    const b = document.getElementById('btnCopy');
+    const old = b.textContent;
+    b.textContent = '已复制 ✓';
+    setTimeout(() => (b.textContent = old), 1400);
+  });
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, m => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
+}
+
+let _progTimer = null;
+const _STEPS = [
+  '正在调用 DeepSeek-V4.1-Flash，已发起请求…',
+  '正在分析文本，逐字标注平仄…',
+  '正在判定文体与韵部归属…',
+  '正在整理结构化结果，即将呈现…'
+];
+let _stepIdx = 0;
+function startProgress() {
+  const box = document.getElementById('progressBox');
+  const el = document.getElementById('progressText');
+  box.style.display = 'block';
+  el.textContent = _STEPS[0];
+  _stepIdx = 0;
+  _progTimer = setInterval(() => {
+    _stepIdx = (_stepIdx + 1) % _STEPS.length;
+    el.textContent = _STEPS[_stepIdx];
+  }, 1400);
+}
+function stopProgress() {
+  clearInterval(_progTimer);
+  document.getElementById('progressBox').style.display = 'none';
+}
+
+/**
+ * 实时字数提示。
+ *
+ * 为什么需要：免费版 Serverless 函数 10 秒硬上限，而模型每次要花约 2400 个
+ * 推理 token，长文本极易超时。与其让用户等 10 秒后收到一句报错，
+ * 不如在输入阶段就把「多少字以内比较稳」讲清楚。
+ * 阈值取 40 字：实测该长度内基本能在 10s 内返回。
+ */
+var _LEN_COMFORT = 40;
+function updateLenHint() {
+  var el = document.getElementById('lenHint');
+  var ta = document.getElementById('poem');
+  if (!el || !ta) return;
+  // 与提交时口径一致：不计空白
+  var n = ta.value.replace(/[\s\u3000]/g, '').length;
+  if (!n) { el.textContent = ''; el.className = 'hint len-hint'; return; }
+  if (n <= _LEN_COMFORT) {
+    el.textContent = '已输入 ' + n + ' 字';
+    el.className = 'hint len-hint';
+  } else {
+    el.textContent = '已输入 ' + n + ' 字 · 超过 ' + _LEN_COMFORT +
+      ' 字可能因服务器 10 秒限制而超时，建议分批分析';
+    el.className = 'hint len-hint len-warn';
+  }
+}
+</script>
+
+<!-- Supabase 浏览器端 SDK（UMD 版，无需构建步骤）。
+     加载失败时 auth.js 会降级：页面照常分析，只是没有账号功能。 -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-config.js"></script>
+<script src="auth.js"></script>
+</body>
+</html>

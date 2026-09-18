@@ -1,2 +1,0 @@
-平仄格律查询站已启动 → http://localhost:3000
-注：API Key 由前端网页输入，经 /api/analyze 请求体传入，服务端不再硬编码。

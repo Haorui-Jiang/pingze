@@ -3,7 +3,7 @@
 --  隔离级别：严格。用户只能读写自己的数据，看不到任何别人的一行。
 --
 --  运行方式（前提已执行 0000_bootstrap_exec_sql.sql）：
---      python sb.py sqlfile supabase/0001_p0_strict.sql
+--      （工作区助手）python db/sb.py sqlfile migrations/0001_p0_strict.sql
 --
 --  表清单：
 --    profiles          用户档案（配额 / 偏好）

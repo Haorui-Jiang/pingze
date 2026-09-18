@@ -20,7 +20,7 @@
 --    · 安全：tier / member_since / member_expires_at 属于「特权列」，
 --      登录用户绝不能自行 PATCH（否则可零元升级）。列级权限 + 触发器双保险。
 --
---  运行：python sb.py sqlfile supabase/0006_membership.sql
+--  运行（工作区助手）：python db/sb.py sqlfile migrations/0006_membership.sql
 -- =====================================================================
 
 -- 1) 会员字段 -----------------------------------------------------------

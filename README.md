@@ -95,7 +95,9 @@ pingze/
 │   ├── admin-users.js         # GET  /api/admin-users
 │   └── admin-set-tier.js      # POST /api/admin-set-tier
 ├── supabase/migrations/       # 数据库迁移脚本（按序号顺序执行）
-├── netlify.toml               # 发布目录、函数目录、函数超时、路由重写
+├── scripts/
+│   └── gen-supabase-config.js # 构建期生成 结果/supabase-config.js（从环境变量取值，见「部署到 Netlify」）
+├── netlify.toml               # 发布目录、函数目录、构建命令、函数超时、路由重写
 ├── package.json
 ├── server.local.js            # 本地开发后端（含静态服务，行为对齐 Netlify）
 ├── .env.example               # 服务端环境变量模板
@@ -115,6 +117,7 @@ cp .env.example .env      # 至少填 DEEPSEEK_API_KEY
 # 2. 准备前端配置（浏览器读不到 .env，需单独一份）
 cp 结果/supabase-config.example.js 结果/supabase-config.js
 #    填入 Supabase 的 Project URL 与 anon public key
+#    （线上这份文件由构建脚本自动生成，本地才需要手动建）
 
 # 3. 启动
 npm start                 # 等价于 node server.local.js
@@ -161,20 +164,38 @@ curl http://localhost:3000/api/health
 
 ## ☁️ 部署到 Netlify
 
-本仓库是**干净的可发布形态**，`netlify.toml` 已声明发布目录与函数目录，**无需任何构建步骤**：
+本仓库是**干净的可发布形态**，`netlify.toml` 已声明发布目录与函数目录：
 
 ```bash
 netlify deploy --prod
 ```
 
-需要在该站点的 **Site settings → Environment variables** 中配置下列变量（Serverless 函数运行时读取；
-`.env` 只在本地生效，线上不会被打包）：
+### 唯一的构建步骤：生成前端 Supabase 配置
+
+`结果/supabase-config.js` 含真实 Project URL 与 anon key，**被 `.gitignore` 排除、不进仓库**，
+所以线上必须现场生成，否则该文件 404，前端降级为「账号功能未启用」。`netlify.toml` 因此声明：
+
+```toml
+command = "node scripts/gen-supabase-config.js"
+```
+
+该脚本在构建时从环境变量 `SUPABASE_URL` + `SUPABASE_ANON_KEY` 生成该文件，并做三项校验：
+
+1. 两个变量都必须存在；
+2. key 必须是合法 JWT，且 `role` 必须是 **`anon`** —— 误填 `service_role` 会**直接中断构建**，
+   防止把全库权限泄露到浏览器；
+3. URL 的 project ref 与 key 的 ref 必须一致。
+
+任一校验失败都会 `exit 1`，**让构建失败而不是静默产出空配置**。改完环境变量后需要重新部署才会生效。
+
+需要在该站点的 **Site settings → Environment variables** 中配置下列变量：
 
 | 变量 | 说明 | 必填 |
 |---|---|---|
 | `DEEPSEEK_API_KEY` | DeepSeek API Key | ✅ |
 | `SUPABASE_URL` | 项目根地址，**不要带 `/rest/v1`** | ✅ |
 | `SUPABASE_SERVICE_KEY` | service_role key，**只放服务端** | ✅ |
+| `SUPABASE_ANON_KEY` | anon public key，**构建时注入前端**（不是函数运行时用的） | ✅ |
 | `ADMIN_EMAILS` | 管理后台邮箱白名单，逗号分隔。未配置时**任何人都进不去**（fail-closed） | ✅ |
 | `DEEPSEEK_MODEL` / `DEEPSEEK_BASE_URL` | 默认 `DeepSeek-V4.1-Flash` / `https://api.deepseek.com` | 可选 |
 | `REQUIRE_LOGIN` | 默认配了 Supabase 就要求登录；设 `0` 放开匿名 | 可选 |
@@ -182,6 +203,8 @@ netlify deploy --prod
 | `ANON_DAILY_QUOTA` | 仅 `REQUIRE_LOGIN=0` 时生效的匿名配额 | 可选 |
 | `REGISTER_MAX_PER_IP` / `REGISTER_MAX_PER_HOUR` | 注册风控上限 | 可选 |
 | `NODE_VERSION` | 建议 `20` | 建议 |
+
+> `SUPABASE_ANON_KEY` 的作用域必须包含 **builds**，否则构建期读不到。
 
 **路由**：`netlify.toml` 把 `/api/*` 重写到 `/.netlify/functions/:splat`，`/admin` 重写到 `/admin.html`。
 
@@ -196,7 +219,8 @@ netlify deploy --prod
 **绝不入库**（已在 `.gitignore` 中排除）：
 
 - `.env` / `.env.local` —— 含 `DEEPSEEK_API_KEY` 与 `SUPABASE_SERVICE_KEY`
-- `结果/supabase-config.js` —— 含真实的 Supabase URL 与 anon key（仓库里只放 `.example.js` 模板）
+- `结果/supabase-config.js` —— 含真实的 Supabase URL 与 anon key（仓库里只放 `.example.js` 模板；
+  线上由 `scripts/gen-supabase-config.js` 在构建时从环境变量现场生成，见「部署到 Netlify」）
 
 **anon key 与 service_role key 的区别**（最容易搞错的地方）：
 

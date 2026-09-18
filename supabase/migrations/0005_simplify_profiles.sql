@@ -17,7 +17,7 @@
 --    · handle_new_user() 只写入 (id, email)
 --    · 收回客户端对 profiles 的列级 UPDATE 授权（极小化档案）
 --
---  运行：python sb.py sqlfile supabase/0005_simplify_profiles.sql
+--  运行（工作区助手）：python db/sb.py sqlfile migrations/0005_simplify_profiles.sql
 --  （exec_sql 以 security definer 执行，整段 DDL 原子提交；任意一步失败自动回滚）
 -- =====================================================================
 

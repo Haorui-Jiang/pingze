@@ -20,7 +20,7 @@
 --  PostgREST 会按 JWT 把角色解析成 authenticated，不会落到 anon；
 --  真正的 anon 请求 = 未登录，严格隔离下应当什么也做不了。
 --
---  运行：python sb.py sqlfile supabase/0002_fix_column_privileges.sql
+--  运行（工作区助手）：python db/sb.py sqlfile migrations/0002_fix_column_privileges.sql
 -- =====================================================================
 
 -- 1. anon 一律无权（未登录不得触碰任何 P0 数据）

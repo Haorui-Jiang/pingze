@@ -3,8 +3,12 @@
   publish = "结果"
   # Netlify Function 所在目录
   functions = "netlify/functions"
-  # 本站为纯静态 + Serverless 函数，无构建步骤；显式声明避免被框架自动探测干扰
-  command = "echo 'Static site, no build step'"
+  # 唯一的构建步骤：把 Netlify 环境变量里的 Supabase 配置写进 结果/supabase-config.js。
+  # 这个文件含真实的 Project URL 与 anon key，被 .gitignore 排除、不进仓库，
+  # 因此每次构建都必须现场生成 —— 否则线上该文件 404，前端降级为
+  # 「账号功能未启用」（见 tools/gen-supabase-config.js）。
+  # 环境变量缺失或校验不过时脚本会 exit 1，让构建直接失败，而不是静默产出空配置。
+  command = "node scripts/gen-supabase-config.js"
 
 [build.environment]
   # 函数运行时的 Node 版本（fetch 为 Node 18+ 内置，无需任何 npm 依赖）

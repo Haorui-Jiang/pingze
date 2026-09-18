@@ -3,7 +3,7 @@
 --
 --  它只做一件事：创建一个 service_role 专属的 exec_sql 函数。
 --  有了它，之后所有建表、改表、灌数据都可以用
---      python sb.py sqlfile supabase/0001_p0_strict.sql
+--      （工作区助手）python db/sb.py sqlfile migrations/0001_p0_strict.sql
 --  全自动跑，不再需要打开后台。
 --
 --  安全边界：

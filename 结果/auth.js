@@ -226,7 +226,7 @@
   window.closeAuthModal = closeModal;
 
   /** 额度说明。真正的额度来自后端与数据库 usage_today()：
-   *  免费用户每日 1 次、会员每日 10 次（见 supabase/0006_membership.sql）。 */
+   *  免费用户每日 1 次、会员每日 10 次（见迁移 0006_membership.sql）。 */
   var DAILY_QUOTA = 10;
 
   function setMode(next) {

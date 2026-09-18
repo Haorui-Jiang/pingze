@@ -3,7 +3,15 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>平仄格律查询 · DeepSeek</title>
+<title>在线平仄检测 - 平仄格律查询工具 · 律诗绝句在线校验</title>
+<meta name="description" content="在线平仄检测工具：把律诗、绝句粘贴进来即可逐字标注平仄、判定文体、溯源韵部，并提示出律与押韵问题。网页版免费额度可直接试用，无需安装软件，韵书依据平水韵 106 韵。" />
+<meta name="keywords" content="在线平仄检测,平仄格律查询,诗词格律检测工具,免费平仄在线查询,诗词格律检测,格律检测哪个好用,诗词格律软件哪个好用,律诗格律检测,绝句平仄检测" />
+<link rel="canonical" href="https://www.pingze.site/" />
+<meta name="robots" content="index,follow" />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="在线平仄检测 - 平仄格律查询工具 · 律诗绝句在线校验" />
+<meta property="og:description" content="在线平仄检测工具：把律诗、绝句粘贴进来即可逐字标注平仄、判定文体、溯源韵部，并提示出律与押韵问题。网页版免费额度可直接试用，无需安装软件，韵书依据平水韵 106 韵。" />
+<meta property="og:url" content="https://www.pingze.site/" />
 <meta name="baidu-site-verification" content="codeva-W1T8O1gd3p" />
 <style>
   :root {
@@ -258,12 +266,17 @@
     display: inline-block; margin: 2px 0 10px; padding: 5px 14px; border-radius: 999px;
     background: rgba(176, 58, 46, 0.08); color: var(--seal); font-size: 13px; letter-spacing: 1px;
   }
+  /* ---------- 静态说明区（SEO 文案，可被搜索引擎抓取） ---------- */
+  #seoIntro .seo-text p { font-size: 14.5px; color: var(--ink-soft); margin-bottom: 10px; }
+  #seoIntro .seo-text b { color: var(--seal); font-weight: 600; }
+  #seoIntro .seo-text a { color: var(--seal); text-decoration: none; border-bottom: 1px solid var(--seal-soft); }
+  #seoIntro .seo-text a:hover { background: rgba(192,86,79,0.10); }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <h1>平仄格律查询</h1>
+    <h1>在线平仄格律查询</h1>
     <div class="sub">DeepSeek-V4.1-Flash · 逐字标注 · 文体判定 · 韵部溯源</div>
   </header>
 
@@ -331,6 +344,29 @@
   <div class="card" id="worksCard" style="display:none">
     <h2>我的作品</h2>
     <div id="worksList"></div>
+  </div>
+
+  <!-- ===== 静态说明：关键词承载区，也是给搜索引擎看的可抓取文案，勿删 ===== -->
+  <div class="card" id="seoIntro">
+    <h2>关于在线平仄检测</h2>
+    <div class="seo-text">
+      <p>
+        <b>在线平仄检测</b>就是把诗句粘进上面的输入框，逐字标出「平 / 仄」，再判定文体
+        （五绝、七绝、五律、七律、词、对联），并给出出律与韵脚提示。
+        它是一个<b>免费、在线、不用安装软件</b>的<b>诗词格律检测工具</b>，打开网页就能用，
+        适合在下载客户端之前先试一次。
+      </p>
+      <p>
+        检测依据的是<b>平水韵</b>：平声即「平」，上声、去声、入声统称「仄」。
+        今人最容易判错的是<b>入声字</b>——它们在普通话里已派入其他声调，凭今音猜常常判反。
+        想先确认一个字属于哪一韵，可直接用
+        <a href="/pingshui-yun">平水韵查询 · 106 韵韵部对照表</a>。
+      </p>
+      <p>
+        免费额度每天 1 次（登录后可用），会员每天 10 次。
+        一句之内若有多音字，建议整句粘进来一起判，比逐字单查更准。
+      </p>
+    </div>
   </div>
 
   <footer>

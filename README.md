@@ -12,7 +12,7 @@
 > 用 **DeepSeek 大模型实时推断**替代传统逐字字典查表，能处理字典收不到的多音字与变格。
 > 参考网站：`http://www.zhgc.com/pz/pz.asp`
 
-**在线体验**：<https://pingze-rhyme.netlify.app>
+**在线体验**：<https://pingze.site/>
 
 ---
 

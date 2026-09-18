@@ -14,7 +14,7 @@
 > so it also handles polyphonic characters and irregular variants a static dictionary misses.
 > Reference site: `http://www.zhgc.com/pz/pz.asp`
 
-**Live demo**: <https://pingze-rhyme.netlify.app>
+**Live demo**: <https://pingze.site/>
 
 ---
 

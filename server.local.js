@@ -67,6 +67,10 @@ const MIME = {
   '.gif': 'image/gif',
   '.ico': 'image/x-icon',
   '.md': 'text/markdown; charset=utf-8',
+  // SEO 站点根文件：本地不补这两项会以 application/octet-stream 吐出，
+  // 线上 Netlify 自己认，但本地验证会失真（浏览器直接下载而不是渲染）。
+  '.xml': 'application/xml; charset=utf-8',
+  '.txt': 'text/plain; charset=utf-8',
 };
 
 /** 解析请求路径为磁盘路径；越界或非法一律返回 null */

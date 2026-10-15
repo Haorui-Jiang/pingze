@@ -175,6 +175,36 @@
     setDisplay('qrModal', false);
   }
 
+  // ---------------------------------------------------------------- 查询记录面板 状态管理
+  //
+  // 「查询记录」按钮的文案要随时反映面板的开/关状态，且面板可能被多处
+  // 触发开关（按钮点击、保存后自动打开、退出登录时关闭），
+  // 所以统一走 showRecords()，不在别处直接改 style.display。
+
+  function recordsOpen() {
+    var card = $('recordsCard');
+    return !!card && card.style.display === 'block';
+  }
+
+  /** 同步按钮文案：开启时「收起查询记录」，关闭时「查询记录」 */
+  function setRecordsBtn(open) {
+    var btn = $('btnRecords');
+    if (btn) btn.textContent = open ? '收起查询记录' : '查询记录';
+  }
+
+  /** 开 / 关查询记录面板（唯一入口，按钮文案随之更新） */
+  function showRecords(show) {
+    var card = $('recordsCard');
+    if (card) card.style.display = show ? 'block' : 'none';
+    setRecordsBtn(show);
+  }
+
+  /** 把查询记录面板滚进视口（打开时调用） */
+  function scrollToRecords() {
+    var card = $('recordsCard');
+    if (card && card.scrollIntoView) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   // ---------------------------------------------------------------- 登录 / 注册
 
   function openModal() {
@@ -272,7 +302,7 @@
     lastResult = null;
     savedForInput = '';
     currentQueryId = null;
-    setDisplay('recordsCard', false);
+    showRecords(false);
     await refresh();
   }
 
@@ -325,9 +355,12 @@
       currentQueryId = res.data && res.data.id;
       savedForInput = lastInput;
       if (node) { node.textContent = '已保存到「查询记录」✓'; node.className = 'ok'; }
-      // 若「查询记录」面板正开着，把这条新保存的也刷进去
-      var card = $('recordsCard');
-      if (card && card.style.display === 'block') loadRecords();
+      // 保存成功后自动打开「查询记录」面板并刷新内容；
+      // 面板原本关着时才额外滚动过去（已开着说明用户就在面板附近，只刷内容）
+      var wasOpen = recordsOpen();
+      showRecords(true);
+      await loadRecords();
+      if (!wasOpen) scrollToRecords();
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = '☆ 保存本次查询'; }
     }
@@ -339,18 +372,26 @@
     if (!card || !list) return;
 
     if (!currentUser) {
-      card.style.display = 'block';
+      showRecords(true);
       list.innerHTML = '<span class="hint">登录后才能查看查询记录。</span>';
       return;
     }
-    card.style.display = 'block';
+    showRecords(true);
     list.innerHTML = '<span class="hint">载入中…</span>';
 
-    var res = await client
-      .from('queries')
-      .select('id, created_at, input_text, result')
-      .order('created_at', { ascending: false })
-      .limit(20);
+    var res;
+    try {
+      res = await client
+        .from('queries')
+        .select('id, created_at, input_text, result')
+        .order('created_at', { ascending: false })
+        .limit(20);
+    } catch (e) {
+      // 网络层异常（而非 res.error）也不能逃逸：saveQuery 里还指着这次刷新
+      // 给用户反馈，抛出会把「已保存」的提示一起拖进未处理 rejection
+      list.innerHTML = '<span class="hint">读取失败：网络异常，请稍后重试</span>';
+      return;
+    }
 
     if (res.error) {
       list.innerHTML = '<span class="hint">读取失败：' + prettyError(res.error) + '</span>';
@@ -402,7 +443,13 @@
 
   async function deleteRecord(id) {
     if (!confirm('确定删除这条查询记录？此操作不可恢复。')) return;
-    var res = await client.from('queries').delete().eq('id', id);
+    var res;
+    try {
+      res = await client.from('queries').delete().eq('id', id);
+    } catch (e) {
+      alert('删除失败：网络异常，请稍后重试');
+      return;
+    }
     if (res.error) {
       alert('删除失败：' + prettyError(res.error));
       return;
@@ -412,8 +459,7 @@
       currentQueryId = null;
       savedForInput = '';
     }
-    var card = $('recordsCard');
-    if (card && card.style.display === 'block') loadRecords();
+    if (recordsOpen()) loadRecords();
   }
 
   // ---------------------------------------------------------------- 对外接口
@@ -440,8 +486,7 @@
       setDisplay('btnSaveQuery', !!currentUser && !!lastInput, 'inline-block');
       if (currentUser) loadQuota();
       // 面板正开着的话要立刻把这条新记录刷进去
-      var card = $('recordsCard');
-      if (currentUser && card && card.style.display === 'block') loadRecords();
+      if (currentUser && recordsOpen()) loadRecords();
     },
     /** 保存本次查询记录（未登录会先弹登录框） */
     saveQuery: saveQuery,
@@ -464,13 +509,15 @@
       openLogin();
     });
     if ($('btnLogout')) $('btnLogout').addEventListener('click', signOut);
-    if ($('btnRecords')) $('btnRecords').addEventListener('click', function () {
-      var card = $('recordsCard');
-      if (card && card.style.display === 'block') {
-        card.style.display = 'none';
-      } else {
-        loadRecords();
+    if ($('btnRecords')) $('btnRecords').addEventListener('click', async function () {
+      if (recordsOpen()) {
+        // 已开着 → 点击收起
+        showRecords(false);
+        return;
       }
+      // 关着 → 打开、载入并滚动到面板所在位置
+      await loadRecords();
+      scrollToRecords();
     });
     if ($('btnSaveQuery')) $('btnSaveQuery').addEventListener('click', saveQuery);
     if ($('authSubmit')) $('authSubmit').addEventListener('click', submitAuth);
@@ -498,6 +545,7 @@
       var banner = $('authDisabledTip');
       if (banner) banner.style.display = 'block';
     }
+    setRecordsBtn(recordsOpen()); // 面板初始隐藏 → 按钮显示「查询记录」
     setMode('signin');
   }
 

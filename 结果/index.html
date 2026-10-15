@@ -4,13 +4,13 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>在线平仄检测 - 平仄韵部查询工具 · 逐字查表</title>
-<meta name="description" content="在线平仄检测工具：粘贴诗词对联，基于平水韵 106 韵字典逐字标注平、仄、通，溯源句尾韵部并检查重字。查表免费，打开网页就能用；登录后查询记录可保存，便于后续浏览；AI 平仄分析与诗词鉴赏按需开启。" />
-<meta name="keywords" content="在线平仄检测,平仄韵部查询,平水韵查询,诗词平仄查询,诗词格律检测,诗词格律检测工具,免费平仄在线查询,韵部查询工具,对联平仄,重字检查,入声字查询" />
+<meta name="description" content="在线平仄检测工具：粘贴诗词对联，基于平水韵 106 韵字典逐字标注平、仄、通，并给出句尾韵部。查表免费，打开网页就能用；登录后查询记录可保存，便于后续浏览；AI 平仄分析与诗词鉴赏按需开启。" />
+<meta name="keywords" content="在线平仄检测,平仄韵部查询,平水韵查询,诗词平仄查询,诗词格律检测,诗词格律检测工具,免费平仄在线查询,韵部查询工具,对联平仄,入声字查询" />
 <link rel="canonical" href="https://www.pingze.site/" />
 <meta name="robots" content="index,follow" />
 <meta property="og:type" content="website" />
 <meta property="og:title" content="在线平仄检测 - 平仄韵部查询工具 · 逐字查表" />
-<meta property="og:description" content="在线平仄检测工具：粘贴诗词对联，基于平水韵 106 韵字典逐字标注平、仄、通，溯源句尾韵部并检查重字。查表免费，打开网页就能用；登录后查询记录可保存，便于后续浏览；AI 平仄分析与诗词鉴赏按需开启。" />
+<meta property="og:description" content="在线平仄检测工具：粘贴诗词对联，基于平水韵 106 韵字典逐字标注平、仄、通，并给出句尾韵部。查表免费，打开网页就能用；登录后查询记录可保存，便于后续浏览；AI 平仄分析与诗词鉴赏按需开启。" />
 <meta property="og:url" content="https://www.pingze.site/" />
 <meta name="baidu-site-verification" content="codeva-W1T8O1gd3p" />
 <style>
@@ -146,15 +146,6 @@
   .pz-tail { font-size: 13.5px; color: var(--seal); margin-left: 6px; letter-spacing: 1px; white-space: nowrap; }
   .pz-tail em { font-style: normal; font-size: 12px; color: var(--ink-soft); }
   .pz-tail-none { color: var(--ink-soft); }
-
-  .yunbu { font-size: 15px; line-height: 2; }
-  .yunbu b { color: var(--seal); }
-  .yun-no { display: inline-block; min-width: 36px; color: var(--ink-soft); font-size: 13px; }
-  .yun-fb { font-size: 12px; color: var(--ink-soft); margin-left: 6px; }
-
-  /* 重字检查：全文展示，重复字标红 */
-  .dup-text { font-size: 17px; line-height: 2.1; letter-spacing: 2px; word-break: break-all; margin-bottom: 8px; }
-  .dup-mark { color: var(--ze); font-weight: 700; border-bottom: 2px solid rgba(164,50,44,0.35); }
 
   /* AI 赏析：双开关，默认全关、零请求 */
   .ai-block {
@@ -295,7 +286,7 @@ var _hmt = _hmt || [];
 <div class="wrap">
   <header>
     <h1>在线平仄格律查询</h1>
-    <div class="sub">平水韵查表 · 逐字标注 · 韵部溯源 · 重字检查</div>
+    <div class="sub">平水韵查表 · 逐字标注 · 句尾韵部</div>
   </header>
 
   <div class="nav">
@@ -335,12 +326,6 @@ var _hmt = _hmt || [];
     <div class="grid-title">逐字平仄（每句一行，行尾 ◆ 为句尾字韵部）</div>
     <div class="pz-grid" id="pzGrid"></div>
 
-    <div class="grid-title">韵部溯源</div>
-    <div class="yunbu" id="yunbu"></div>
-
-    <div class="grid-title">重字检查</div>
-    <div class="dup" id="dupBox"></div>
-
     <div class="ai-block">
       <div class="grid-title">AI 赏析（可选，默认关闭；勾选后才调用，计入每日额度）</div>
       <div class="ai-row">
@@ -377,7 +362,7 @@ var _hmt = _hmt || [];
     <div class="seo-text">
       <p>
         <b>在线平仄检测</b>就是把诗句粘进上面的输入框，基于<b>平水韵 106 韵</b>字典逐字标注
-        「平 / 仄 / 通」，并给出句尾韵部与重字检查。全程在浏览器本地查表完成：
+        「平 / 仄 / 通」，并给出句尾韵部。全程在浏览器本地查表完成：
         <b>免费、打开网页就能用</b>，结果确定可复现，不经过任何大模型。
       </p>
       <p>
@@ -520,29 +505,6 @@ function render(res) {
   });
   document.getElementById('pzGrid').innerHTML = gridHtml;
 
-  // 韵部汇总：逐句列出尾字与其韵部
-  var yunHtml = res.lines.map(function (ln, i) {
-    var y = ln.tailYun.length ? ln.tailYun.join('、') : '（尾字未收录）';
-    return '<div class="yun-item"><span class="yun-no">句' + (i + 1) + '</span>◆ ' +
-      esc(ln.tail) + '　<b>' + esc(y) + '</b>' +
-      (ln.tailFallback ? '<span class="yun-fb">（末字无韵目，回退取字）</span>' : '') + '</div>';
-  }).join('');
-  document.getElementById('yunbu').innerHTML = yunHtml || '<span class="hint">无可显示的韵部信息</span>';
-
-  // 重字检查：全文展示，重复字标红（V4.2 口径：字频 ≥2，不做繁简归一）
-  var dupBox = document.getElementById('dupBox');
-  if (res.dupChars.length) {
-    var dupSet = {};
-    res.dupChars.forEach(function (c) { dupSet[c] = 1; });
-    var marked = res.text.split('').map(function (c) {
-      return dupSet[c] ? '<span class="dup-mark">' + esc(c) + '</span>' : esc(c);
-    }).join('');
-    dupBox.innerHTML = '<div class="dup-text">' + marked + '</div>' +
-      '<div class="hint">重复 ' + res.dupChars.length + ' 字：' + res.dupChars.map(esc).join('、') + '</div>';
-  } else {
-    dupBox.innerHTML = '<span class="hint">本段无重复用字</span>';
-  }
-
   // AI 赏析块：每次新查询都重置为「全关 + 无输出」
   resetAi();
 
@@ -560,7 +522,6 @@ function buildCopy(res) {
   });
   lines.push('【统计】总字数 ' + res.total + ' · 平 ' + res.ping + ' · 仄 ' + res.ze +
     ' · 通 ' + res.tong + ' · 未收录 ' + res.unknown);
-  lines.push('【重字】' + (res.dupChars.length ? res.dupChars.join('、') : '无'));
   return lines.join('\n');
 }
 

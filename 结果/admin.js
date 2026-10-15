@@ -59,9 +59,12 @@
     if (!iso) return '—';
     var d = new Date(iso);
     if (isNaN(d.getTime())) return '—';
+    // 固定按东八区（Asia/Shanghai，全年 UTC+8、无夏令时）渲染：
+    // 时间戳 +8h 后取 UTC 组件，不受浏览器时区影响，保证后台时间口径一致
+    var cn = new Date(d.getTime() + 8 * 3600 * 1000);
     function p(n) { return n < 10 ? '0' + n : '' + n; }
-    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
-      ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+    return cn.getUTCFullYear() + '-' + p(cn.getUTCMonth() + 1) + '-' + p(cn.getUTCDate()) +
+      ' ' + p(cn.getUTCHours()) + ':' + p(cn.getUTCMinutes());
   }
 
   function esc(s) {
@@ -118,7 +121,7 @@
     if (!u.member_expires_at) return '<span class="muted">—</span>';
     var left = u.member_days_left;
     if (left === null || left === undefined) return '<span class="muted">—</span>';
-    var expText = '到期 ' + (String(u.member_expires_at).slice(0, 10));
+    var expText = '到期 ' + fmt(u.member_expires_at).slice(0, 10);
     if (left < 0) {
       return '<span class="days-expired">已过期 ' + Math.abs(left) + ' 天</span>' +
         '<div class="muted" style="font-size:12px">' + expText + '</div>';

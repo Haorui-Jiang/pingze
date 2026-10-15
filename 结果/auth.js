@@ -63,11 +63,14 @@
   function formatTime(iso) {
     var d = new Date(iso);
     if (isNaN(d.getTime())) return '';
+    // 固定按东八区（Asia/Shanghai，全年 UTC+8、无夏令时）渲染，
+    // 不受浏览器时区影响，与管理后台时间口径一致
+    var cn = new Date(d.getTime() + 8 * 3600 * 1000);
     function pad(n) {
       return n < 10 ? '0' + n : String(n);
     }
-    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
-      ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    return cn.getUTCFullYear() + '-' + pad(cn.getUTCMonth() + 1) + '-' + pad(cn.getUTCDate()) +
+      ' ' + pad(cn.getUTCHours()) + ':' + pad(cn.getUTCMinutes());
   }
   /** 从查表结果里提取统计数字（供记录列表标签用） */
   function summarize(result) {

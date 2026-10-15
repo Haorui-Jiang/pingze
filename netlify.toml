@@ -18,7 +18,8 @@
 # 注意：`functions.timeout` 必须是「每个函数一项」的对象，不能写成标量，
 # 否则 Netlify 解析 netlify.toml 时会直接报
 # "Configuration property functions.timeout must be an object" 而拒绝部署。
-[functions.analyze]
+# analyze 已于 V5 删除（平仄查询改浏览器本地查表）；ai-insight 是唯一的 AI 入口。
+[functions.ai-insight]
   timeout = 10
 [functions.register]
   timeout = 10
@@ -27,8 +28,9 @@
 [functions.admin-set-tier]
   timeout = 10
 
-# 将前端请求的 /api/analyze 映射到 Serverless 函数 analyze
-# 实际调用路径：/.netlify/functions/analyze
+# 将前端请求的 /api/* 映射到 Serverless 函数（/:splat 即函数名）
+# 实际调用路径：/.netlify/functions/<函数名>
+# V5 起 /api/analyze 已不存在；AI 赏析走 /api/ai-insight。
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"

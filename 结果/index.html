@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>在线平仄检测 - 平仄格律查询工具 · 律诗绝句在线校验</title>
-<meta name="description" content="在线平仄检测工具：把律诗、绝句粘贴进来即可逐字标注平仄、判定文体、溯源韵部，并提示出律与押韵问题。网页版免费额度可直接试用，无需安装软件，韵书依据平水韵 106 韵。" />
-<meta name="keywords" content="在线平仄检测,平仄格律查询,诗词格律检测工具,免费平仄在线查询,诗词格律检测,格律检测哪个好用,诗词格律软件哪个好用,律诗格律检测,绝句平仄检测" />
+<title>在线平仄检测 - 平仄韵部查询工具 · 逐字查表</title>
+<meta name="description" content="在线平仄检测工具：粘贴诗词对联，基于平水韵 106 韵字典逐字标注平、仄、通，溯源句尾韵部并检查重字。查表免费，打开网页就能用；登录后查询记录可保存，便于后续浏览；AI 平仄分析与诗词鉴赏按需开启。" />
+<meta name="keywords" content="在线平仄检测,平仄韵部查询,平水韵查询,诗词平仄查询,诗词格律检测,诗词格律检测工具,免费平仄在线查询,韵部查询工具,对联平仄,重字检查,入声字查询" />
 <link rel="canonical" href="https://www.pingze.site/" />
 <meta name="robots" content="index,follow" />
 <meta property="og:type" content="website" />
-<meta property="og:title" content="在线平仄检测 - 平仄格律查询工具 · 律诗绝句在线校验" />
-<meta property="og:description" content="在线平仄检测工具：把律诗、绝句粘贴进来即可逐字标注平仄、判定文体、溯源韵部，并提示出律与押韵问题。网页版免费额度可直接试用，无需安装软件，韵书依据平水韵 106 韵。" />
+<meta property="og:title" content="在线平仄检测 - 平仄韵部查询工具 · 逐字查表" />
+<meta property="og:description" content="在线平仄检测工具：粘贴诗词对联，基于平水韵 106 韵字典逐字标注平、仄、通，溯源句尾韵部并检查重字。查表免费，打开网页就能用；登录后查询记录可保存，便于后续浏览；AI 平仄分析与诗词鉴赏按需开启。" />
 <meta property="og:url" content="https://www.pingze.site/" />
 <meta name="baidu-site-verification" content="codeva-W1T8O1gd3p" />
 <style>
@@ -98,7 +98,7 @@
   }
   .act-bar .hint { margin-top: 0; }
 
-  /* 输入字数提示：超过安全长度时转为警示色，提醒用户可能超时 */
+  /* 输入字数提示：超过 1000 字（引擎上限）时转为警示色 */
   .len-hint { margin-left: auto; }
   .len-hint.len-warn { color: var(--seal); font-weight: 600; }
 
@@ -117,7 +117,7 @@
 
   /* 结果区 */
   #result { display: none; }
-  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap: 12px; margin: 6px 0 18px; }
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px,1fr)); gap: 12px; margin: 6px 0 18px; }
   .meta {
     background: #fffdf8; border: 1px solid var(--line); border-radius: 10px;
     padding: 14px 16px; text-align: center;
@@ -126,28 +126,63 @@
   .meta .v { font-size: 22px; color: var(--seal); margin-top: 6px; letter-spacing: 2px; }
 
   .grid-title { font-size: 15px; color: var(--ink-soft); letter-spacing: 2px; margin: 8px 0 12px; }
-  .pz-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+
+  /* 逐字平仄：每句一行（V4.2 版式），行尾带 ◆ 尾字韵目 */
+  .pz-grid { margin-bottom: 18px; }
+  .pz-line { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
   .pz-cell {
-    width: 56px; height: 56px; border-radius: 8px;
+    width: 52px; height: 52px; border-radius: 8px;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     border: 1px solid var(--line); background: #fffdf8;
     transition: transform .12s;
   }
   .pz-cell:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(120,100,70,0.14); }
-  .pz-cell .ch { font-size: 24px; line-height: 1; }
+  .pz-cell .ch { font-size: 23px; line-height: 1; }
   .pz-cell .tone { font-size: 12px; margin-top: 4px; letter-spacing: 1px; }
   .pz-cell.ping { color: var(--ping); border-color: rgba(47,125,86,0.4); }
   .pz-cell.ze  { color: var(--ze); }
-  .pz-cell.flag { color: var(--gold); }
-  .pz-cell .punct { color: var(--ink-soft); }
+  .pz-cell.tong { color: var(--gold); border-color: rgba(176,141,62,0.45); }
+  .pz-cell.unknown { color: var(--ink-soft); border-style: dashed; }
+  .pz-tail { font-size: 13.5px; color: var(--seal); margin-left: 6px; letter-spacing: 1px; white-space: nowrap; }
+  .pz-tail em { font-style: normal; font-size: 12px; color: var(--ink-soft); }
+  .pz-tail-none { color: var(--ink-soft); }
 
-  .yunbu { font-size: 15px; line-height: 2; color: var(--ink); }
+  .yunbu { font-size: 15px; line-height: 2; }
   .yunbu b { color: var(--seal); }
+  .yun-no { display: inline-block; min-width: 36px; color: var(--ink-soft); font-size: 13px; }
+  .yun-fb { font-size: 12px; color: var(--ink-soft); margin-left: 6px; }
 
-  .note {
-    margin-top: 14px; padding: 14px 16px; border-left: 3px solid var(--seal);
-    background: var(--paper-2); border-radius: 0 8px 8px 0; font-size: 15px;
+  /* 重字检查：全文展示，重复字标红 */
+  .dup-text { font-size: 17px; line-height: 2.1; letter-spacing: 2px; word-break: break-all; margin-bottom: 8px; }
+  .dup-mark { color: var(--ze); font-weight: 700; border-bottom: 2px solid rgba(164,50,44,0.35); }
+
+  /* AI 赏析：双开关，默认全关、零请求 */
+  .ai-block {
+    margin-top: 18px; border: 1px dashed var(--line); border-radius: 10px;
+    padding: 14px 16px 12px; background: rgba(255,253,248,0.6);
   }
+  .ai-block .grid-title { margin-top: 0; }
+  .ai-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 6px; }
+  .ai-out {
+    display: none; white-space: pre-wrap; word-break: break-word;
+    font-family: inherit; font-size: 14.5px; line-height: 1.9; color: var(--ink);
+    background: #fffdf8; border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px 14px; margin: 6px 0 10px;
+  }
+  .switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; font-size: 14.5px; letter-spacing: 1px; }
+  .switch input { display: none; }
+  .switch i {
+    width: 38px; height: 21px; border-radius: 999px; background: var(--line);
+    position: relative; transition: background .15s; flex: none;
+  }
+  .switch i::after {
+    content: ""; position: absolute; top: 2.5px; left: 2.5px; width: 16px; height: 16px;
+    border-radius: 50%; background: #fffdf8; transition: left .15s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+  }
+  .switch input:checked + i { background: var(--ping); }
+  .switch input:checked + i::after { left: 19.5px; }
+  .mini-btn:disabled { opacity: .5; cursor: not-allowed; }
 
   .copy-bar { display: flex; gap: 10px; align-items: center; margin-top: 16px; flex-wrap: wrap; }
   .copy-bar textarea {
@@ -161,7 +196,7 @@
   }
   .mini-btn:hover { background: rgba(192,86,79,0.10); }
 
-  /* 「保存为作品」：结果窗口里的主操作，做明显一点 */
+  /* 「保存本次查询」：结果窗口里的主操作，做明显一点 */
   .mini-btn.save-btn {
     color: #fff; background: linear-gradient(135deg, var(--seal), var(--seal-soft));
     border-color: transparent; font-weight: 600;
@@ -176,17 +211,6 @@
     border-radius: 10px; padding: 16px 18px; font-size: 15px;
   }
   .err b { letter-spacing: 1px; }
-
-  .loading { text-align: center; color: var(--ink-soft); padding: 30px; letter-spacing: 2px; }
-  .loading .dots::after { content: "·"; animation: dots 1.2s steps(4) infinite; }
-  @keyframes dots { 0%{content:"";} 25%{content:"·";} 50%{content:"··";} 75%{content:"···";} 100%{content:"····";} }
-  .spinner {
-    width: 26px; height: 26px; margin: 0 auto 14px;
-    border: 3px solid var(--line); border-top-color: var(--seal);
-    border-radius: 50%; animation: spin 0.8s linear infinite;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .progress-text { font-size: 16px; letter-spacing: 2px; color: var(--seal); }
 
   footer { text-align: center; color: var(--ink-soft); font-size: 13px; letter-spacing: 1px; margin-top: 8px; }
   footer code { font-family: monospace; }
@@ -223,38 +247,22 @@
   .modal-actions { display: flex; gap: 8px; flex-wrap: wrap; }
   .err-tip { color: var(--ze); }
 
+  /* 查询记录列表 */
   .hist-item {
-    border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
-    margin-bottom: 10px; background: #fffdf8; cursor: pointer;
-    transition: transform .12s, box-shadow .12s;
-  }
-  .hist-item:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(120,100,70,0.14); }
-  .hist-meta { font-size: 12px; color: var(--ink-soft); letter-spacing: 1px; }
-  .hist-text { font-size: 15px; margin: 6px 0 8px; letter-spacing: 1px; white-space: pre-wrap; word-break: break-word; }
-  .hist-tags { display: flex; gap: 12px; font-size: 12px; }
-  .tone-ping { color: var(--ping); }
-  .tone-ze   { color: var(--ze); }
-  .tone-tong { color: var(--gold); }
-
-  /* 我的作品 */
-  .work-item {
-    display: flex; align-items: flex-start; gap: 12px;
     border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
     margin-bottom: 10px; background: #fffdf8;
     transition: transform .12s, box-shadow .12s;
   }
-  .work-item:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(120,100,70,0.14); }
-  .work-main { flex: 1; cursor: pointer; min-width: 0; }
-  .work-title { font-size: 16px; color: var(--ink); letter-spacing: 1px; }
-  .work-form { font-size: 12px; color: var(--seal-soft); margin-left: 4px; }
-  .work-text { font-size: 14px; color: var(--ink-soft); margin: 4px 0 6px; letter-spacing: 1px;
-    white-space: pre-wrap; word-break: break-word; }
-  .work-actions { display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
-  .work-actions .mini-btn { white-space: nowrap; }
-  .modal label { margin-top: 6px; }
-  .modal textarea { min-height: 150px; resize: vertical; }
+  .hist-item:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(120,100,70,0.14); }
+  .hist-meta { font-size: 12px; color: var(--ink-soft); letter-spacing: 1px; }
+  .hist-text { font-size: 15px; margin: 6px 0 8px; letter-spacing: 1px; white-space: pre-wrap; word-break: break-word; cursor: pointer; }
+  .hist-tags { display: flex; gap: 12px; font-size: 12px; align-items: center; }
+  .tone-ping { color: var(--ping); }
+  .tone-ze   { color: var(--ze); }
+  .tone-tong { color: var(--gold); }
+  .hist-tags .rec-del { margin-left: auto; padding: 4px 12px; font-size: 12.5px; }
 
-  /* 会员升级 / 二维码引导弹层 */
+  /* 会员升级 / AI 额度引导弹层 */
   .modal .qr-box { text-align: center; }
   .modal .qr-box img {
     width: 232px; height: 232px; display: block; margin: 4px auto 12px;
@@ -287,7 +295,7 @@ var _hmt = _hmt || [];
 <div class="wrap">
   <header>
     <h1>在线平仄格律查询</h1>
-    <div class="sub">DeepSeek-V4.1-Flash · 逐字标注 · 文体判定 · 韵部溯源</div>
+    <div class="sub">平水韵查表 · 逐字标注 · 韵部溯源 · 重字检查</div>
   </header>
 
   <div class="nav">
@@ -296,17 +304,16 @@ var _hmt = _hmt || [];
   </div>
 
   <div class="userbar">
-    <span class="user-info" id="userInfo">未登录</span>
+    <span class="user-info" id="userInfo">未登录 · 查表免费，登录后可保存查询记录</span>
     <span class="quota" id="quotaInfo"></span>
     <button class="mini-btn" id="btnAuth">登录 / 注册</button>
-    <button class="mini-btn" id="btnHistory" style="display:none">我的分析</button>
-    <button class="mini-btn" id="btnWorks" style="display:none">我的作品</button>
+    <button class="mini-btn" id="btnRecords" style="display:none">查询记录</button>
     <button class="mini-btn" id="btnLogout" style="display:none">退出</button>
   </div>
 
   <p class="auth-disabled" id="authDisabledTip" style="display:none">
     账号功能未启用：请复制 <code>supabase-config.example.js</code> 为 <code>supabase-config.js</code>，
-    填入 Supabase 的 Project URL 与 anon key。
+    填入 Supabase 的 Project URL 与 anon key。不影响平仄查询功能。
   </p>
 
   <div class="card">
@@ -314,74 +321,85 @@ var _hmt = _hmt || [];
     <label>诗词 / 对联文本</label>
     <textarea id="poem" oninput="updateLenHint()" placeholder="在此粘贴你的诗句，例如：&#10;白日依山尽，黄河入海流。&#10;欲穷千里目，更上一层楼。"></textarea>
     <div class="act-bar">
-      <button class="btn" id="go" onclick="analyze()">分　析</button>
-      <span class="hint" style="margin-top:0">模型 <code>DeepSeek-V4.1-Flash</code> · 密钥由服务端配置，无需输入</span>
+      <button class="btn" id="go" onclick="analyze()">查　询</button>
+      <span class="hint" style="margin-top:0">本地字典查表 · 平水韵 106 韵 · 完全免费</span>
       <span class="hint len-hint" id="lenHint"></span>
     </div>
-  </div>
-
-  <div id="progressBox" class="loading" style="display:none">
-    <div class="spinner"></div>
-    <div class="progress-text" id="progressText"></div>
+    <p class="hint">提示：换行与标点会自动分句；登录后查询记录可保存入数据库，便于后续浏览。</p>
   </div>
 
   <div id="result" class="card" style="display:none">
-    <h2>格律分析</h2>
+    <h2>查询结果</h2>
     <div class="meta-grid" id="metaGrid"></div>
 
-    <div class="grid-title">逐字平仄</div>
+    <div class="grid-title">逐字平仄（每句一行，行尾 ◆ 为句尾字韵部）</div>
     <div class="pz-grid" id="pzGrid"></div>
 
     <div class="grid-title">韵部溯源</div>
     <div class="yunbu" id="yunbu"></div>
 
-    <div class="note" id="note"></div>
+    <div class="grid-title">重字检查</div>
+    <div class="dup" id="dupBox"></div>
+
+    <div class="ai-block">
+      <div class="grid-title">AI 赏析（可选，默认关闭；勾选后才调用，计入每日额度）</div>
+      <div class="ai-row">
+        <label class="switch"><input type="checkbox" id="swAnalysis"><i></i><span>平仄分析</span></label>
+        <button class="mini-btn" id="btnAiAnalysis" disabled onclick="generateAi('analysis')">生成平仄分析</button>
+      </div>
+      <pre class="ai-out" id="aiOutAnalysis"></pre>
+      <div class="ai-row">
+        <label class="switch"><input type="checkbox" id="swAppreciation"><i></i><span>诗词鉴赏</span></label>
+        <button class="mini-btn" id="btnAiAppreciation" disabled onclick="generateAi('appreciation')">生成诗词鉴赏</button>
+      </div>
+      <pre class="ai-out" id="aiOutAppreciation"></pre>
+      <p class="hint">免费每日 3 次、会员每日 10 次；AI 仅依据上方查表结果做分析，不会自行改判平仄。</p>
+    </div>
 
     <div class="copy-bar">
       <textarea id="copyText" readonly></textarea>
       <button class="mini-btn" id="btnCopy" onclick="copyResult()">复制全部</button>
-      <button class="mini-btn save-btn" id="btnSavePoem" style="display:none" title="把这首次分析存入「我的作品」，可随时编辑或删除">☆ 保存为作品</button>
+      <button class="mini-btn save-btn" id="btnSaveQuery" style="display:none">☆ 保存本次查询</button>
     </div>
     <span class="hint" id="saveTip"></span>
   </div>
 
+  <div class="card" id="recordsCard" style="display:none">
+    <h2>查询记录</h2>
+    <div id="recordsList"></div>
+  </div>
+
   <div id="errorBox"></div>
-
-  <div class="card" id="historyCard" style="display:none">
-    <h2>我的分析</h2>
-    <div id="historyList"></div>
-  </div>
-
-  <div class="card" id="worksCard" style="display:none">
-    <h2>我的作品</h2>
-    <div id="worksList"></div>
-  </div>
 
   <!-- ===== 静态说明：关键词承载区，也是给搜索引擎看的可抓取文案，勿删 ===== -->
   <div class="card" id="seoIntro">
     <h2>关于在线平仄检测</h2>
     <div class="seo-text">
       <p>
-        <b>在线平仄检测</b>就是把诗句粘进上面的输入框，逐字标出「平 / 仄」，再判定文体
-        （五绝、七绝、五律、七律、词、对联），并给出出律与韵脚提示。
-        它是一个<b>免费、在线、不用安装软件</b>的<b>诗词格律检测工具</b>，打开网页就能用，
-        适合在下载客户端之前先试一次。
+        <b>在线平仄检测</b>就是把诗句粘进上面的输入框，基于<b>平水韵 106 韵</b>字典逐字标注
+        「平 / 仄 / 通」，并给出句尾韵部与重字检查。全程在浏览器本地查表完成：
+        <b>免费、打开网页就能用</b>，结果确定可复现，不经过任何大模型。
       </p>
       <p>
-        检测依据的是<b>平水韵</b>：平声即「平」，上声、去声、入声统称「仄」。
+        判定规则沿用传统韵书：只入平声韵（上平、下平）为「平」，只入上声、去声、入声韵为「仄」，
+        平仄两读的字标「通」，韵部未收录的字以「？」占位、位置不塌。
         今人最容易判错的是<b>入声字</b>——它们在普通话里已派入其他声调，凭今音猜常常判反。
         想先确认一个字属于哪一韵，可直接用
         <a href="/pingshui-yun">平水韵查询 · 106 韵韵部对照表</a>。
       </p>
       <p>
-        免费额度每天 1 次（登录后可用），会员每天 10 次。
-        一句之内若有多音字，建议整句粘进来一起判，比逐字单查更准。
+        查询完成后，还可以按需开启 <b>AI 平仄分析</b>与<b>诗词鉴赏</b>（默认关闭，仅勾选后才调用）：
+        AI 只依据上面的查表结果做判断与阐释，不会自行改判平仄。
+      </p>
+      <p>
+        如果你还在比较格律检测哪个好用、诗词格律软件哪个好用，不妨先把本页加入收藏：
+        粘贴即查、逐字有据，平仄与韵部判定全部来自平水韵原表，结果确定可复现。
       </p>
     </div>
   </div>
 
   <footer>
-    仿 <code>www.zhgc.com/pz/pz.asp</code> 功能 · 以大模型替代逐字字典查表<br>
+    复刻 <code>www.zhgc.com/pz/pz.asp</code> 查表逻辑 · 平水韵 106 韵 · 纯本地字典查询<br>
     <a href="/pingshui-yun" style="color:var(--seal);text-decoration:none">平水韵查询 · 106 韵韵部对照表</a>
     ·
     <a href="https://github.com/Haorui-Jiang/pingze" target="_blank" rel="noopener" style="color:var(--seal);text-decoration:none">开源代码（GitHub）</a>
@@ -390,7 +408,7 @@ var _hmt = _hmt || [];
   <div class="modal-mask" id="authModal">
     <div class="modal">
       <h3 id="authTitle">登录</h3>
-      <p class="hint" id="authQuotaNote">登录后每日可分析 10 次，缓存命中不计费</p>
+      <p class="hint" id="authQuotaNote">登录后查询记录可保存；AI 赏析每日免费 3 次</p>
       <input id="authEmail" type="email" placeholder="邮箱" autocomplete="email">
       <input id="authPassword" type="password" placeholder="密码（至少 8 位，含字母和数字）" autocomplete="current-password">
       <p class="hint" id="authTip"></p>
@@ -402,27 +420,10 @@ var _hmt = _hmt || [];
     </div>
   </div>
 
-  <div class="modal-mask" id="worksModal">
-    <div class="modal">
-      <h3>编辑作品</h3>
-      <label>标题（留空则取首句）</label>
-      <input id="workEditTitle" type="text" placeholder="标题" maxlength="60">
-      <label>正文</label>
-      <textarea id="workEditBody" placeholder="在此修改诗词 / 对联正文"></textarea>
-      <label>文体（选填）</label>
-      <input id="workEditForm" type="text" placeholder="如：五言绝句 / 七律 / 对联">
-      <p class="hint" id="workEditTip"></p>
-      <button class="btn" id="workEditSave">保　存</button>
-      <div class="modal-actions">
-        <button class="mini-btn" id="workEditCancel">取消</button>
-      </div>
-    </div>
-  </div>
-
   <div class="modal-mask" id="qrModal">
     <div class="modal">
-      <h3 id="qrTitle">开通会员</h3>
-      <p class="hint" id="qrSub">免费用户每天可分析 1 次，会员每天 10 次</p>
+      <h3 id="qrTitle">AI 赏析额度</h3>
+      <p class="hint" id="qrSub">免费用户每天可用 3 次，会员每天 10 次</p>
       <div class="qr-box">
         <span class="qr-price">会员 ¥1 / 天 · 按月计费（30 天 ¥30）</span>
         <img src="二维码.jpg" alt="运营人微信二维码">
@@ -430,7 +431,7 @@ var _hmt = _hmt || [];
           ① 长按 / 截图后用<b>微信扫一扫</b>识别二维码<br>
           ② 添加网站运营人，说明「<b>开通会员</b>」<br>
           ③ 付款并与运营人确认后，由运营人在后台为你开通<br>
-          ④ 开通后<b>刷新本页</b>，即可享受每日 10 次分析
+          ④ 开通后<b>刷新本页</b>，即可享受每日 10 次 AI 赏析
         </div>
       </div>
       <p class="hint" id="qrTip"></p>
@@ -441,273 +442,269 @@ var _hmt = _hmt || [];
   </div>
 </div>
 
+<!-- 依赖顺序：Supabase SDK → 前端配置 → 韵表数据 → 本地查表引擎 → 账号系统 → 内联逻辑 -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-config.js"></script>
+<script src="pingshui-yun-data.js"></script>
+<script src="pingze-engine.js"></script>
+<script src="auth.js"></script>
 <script>
-async function analyze() {
-  // 读取输入文本时删除所有换行与空格字符（含全角空格 \u3000），便于逐字平仄分析
-  const text = document.getElementById('poem').value.replace(/[\s\u3000]/g, '');
-  // 把清理后的文本写回输入框，让用户看到实际送分析的内容
-  document.getElementById('poem').value = text;
-  const btn = document.getElementById('go');
-  const errBox = document.getElementById('errorBox');
-  const resBox = document.getElementById('result');
+/** 本次查询的原始输入与查表结果（保存记录 / AI 赏析共用） */
+var lastRawText = '';
+var lastRes = null;
 
-  errBox.innerHTML = '';
-  if (!text.trim()) {
-    showError('请先在上方粘贴要分析的诗词文本。');
-    return;
-  }
-  // 未登录不许分析：这里拦是为了体验，真正的强制在后端 /api/analyze
-  if (window.PingzeAuth && !(await window.PingzeAuth.requireLogin())) {
-    btn.disabled = false;
-    return;
-  }
-  // 免费用户第 2 次分析：弹出二维码引导开通会员（体验层拦截；超额后端仍会 429）
-  if (window.PingzeAuth && typeof window.PingzeAuth.shouldBlockForUpgrade === 'function'
-      && (await window.PingzeAuth.shouldBlockForUpgrade())) {
-    btn.disabled = false;
-    return;
-  }
-  btn.disabled = true;
-  const old = btn.textContent;
-  btn.textContent = '分析中…';
-  startProgress();
+/**
+ * 查询入口：纯本地字典查表（平水韵 106 韵），同步返回、不走网络。
+ * 判定逻辑见 pingze-engine.js（复刻国粹网 pz.asp 六步流水线）。
+ */
+function analyze() {
+  var ta = document.getElementById('poem');
+  lastRawText = ta.value;
+  document.getElementById('errorBox').innerHTML = '';
 
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 56000);
-    // 带上 Supabase 的 JWT，后端据此识别用户、计配额、写历史
-    const headers = { 'Content-Type': 'application/json' };
-    let poemId = null;
-    if (window.PingzeAuth) {
-      Object.assign(headers, await window.PingzeAuth.authHeaders());
-      poemId = window.PingzeAuth.getPoemId();
-    }
-    const r = await fetch('/api/analyze', {
-      method: 'POST',
-      headers: headers,
-      body: JSON.stringify(poemId ? { text: text, poemId: poemId } : { text: text }),
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
-    const raw = await r.text();
-    let data;
-    try {
-      data = JSON.parse(raw);
-    } catch {
-      stopProgress();
-      showError('服务端没有返回有效结果：调用超时被中断（免费版单次上限 10 秒），或返回内容被网关截断。长文本最容易触发。请把文本分成 20～40 字的小段重试；若短句也持续失败，请检查服务器出网与 DeepSeek 配置。');
-      return;
-    }
-    stopProgress();
-    // 会话过期等情况下后端会返回 401，直接把登录框弹出来，比显示一句报错有用
-    if (r.status === 401 || data.needLogin) {
-      if (window.PingzeAuth) {
-        await window.PingzeAuth.refresh();
-        window.PingzeAuth.openLogin();
-      }
-      showError(data.error || '登录状态已失效，请重新登录。');
-      return;
-    }
-    if (data.error) {
-      showError(data.error);
-      // 免费用户额度用尽：顺便把开通会员的二维码弹出来，别让用户卡死在这一步
-      if (data.needUpgrade && window.PingzeAuth && window.PingzeAuth.openUpgradeQr) {
-        window.PingzeAuth.openUpgradeQr(
-          '开通会员',
-          '今日免费额度已用尽；会员每天可分析 10 次',
-          '支付后请联系运营人开通，开通后刷新本页即可。'
-        );
-      }
-      return;
-    }
-    // 结果结构校验：后端被平台超时强杀、或返回体被网关截断时，
-    // 有时仍会给出一个「合法 JSON 但没有 chars」的对象（例如 {} 或 {"detail":"..."}）。
-    // 若不校验就直接 render，页面会显示成「文体 —、总字数 0、平/仄 0/0」的空白结果，
-    // 让用户误以为分析成功。这里必须当作失败处理。
-    if (!isRenderableResult(data)) {
-      showError(
-        '未能取得有效的分析结果（返回内容缺少逐字平仄数据）。' +
-        '常见原因：DeepSeek 调用耗时超过服务器限制被中断，长文本尤其容易触发。' +
-        '请缩短文本后重试，或稍后再试。'
-      );
-      return;
-    }
-    render(data);
-    if (window.PingzeAuth) window.PingzeAuth.onAnalysisDone(text, data);
-  } catch (e) {
-    stopProgress();
-    if (e && e.name === 'AbortError') {
-      showError('请求超时：服务器在 10 秒内没能返回结果（免费版单次上限）。这是长文本最常见的问题——模型每首都要花大量推理时间。建议把文本分成 20～40 字的小段分次分析，短句通常几秒内就能出结果。');
-    } else {
-      showError('调用失败：' + e.message);
-    }
-  } finally {
-    btn.disabled = false;
-    btn.textContent = old;
+  var res = window.PINGZE_ENGINE.analyze(ta.value);
+  if (!res.ok) {
+    lastRes = null;
+    showError(res.error);
+    return;
   }
+  lastRes = res;
+  render(res);
+  if (window.PingzeAuth) window.PingzeAuth.onQueryDone(lastRawText, res);
 }
 
 function showError(msg) {
   document.getElementById('result').style.display = 'none';
   document.getElementById('errorBox').innerHTML =
-    '<div class="err"><b>分析未完成</b><br>' + msg + '</div>';
-}
-
-// 过滤掉 char 为空白的占位条目（空格 / 换行 / 全角空格 / 空串）。
-// 这类条目来自模型的「空格也占一位」输出，直接渲染会出现「空字符 + 符」的空格子。
-// 后端已做归一化，这里再兜一层，保证历史记录 / 老缓存也能正常显示。
-function visibleChars(d) {
-  return (d && Array.isArray(d.chars) ? d.chars : []).filter(
-    c => c && String(c.char == null ? '' : c.char).replace(/[\s\u3000]/g, '') !== ''
-  );
-}
-
-/**
- * 一个响应是否「值得渲染」。
- *
- * 存在的意义：区分「模型确实没标出任何字」与「这次调用其实失败了」。
- * 后者若被当成成功结果渲染，界面会出现文体 —、总字数 0、平/仄 0/0 的假成功，
- * 用户完全无法察觉问题。凡是解析出来的对象里 chars 不是非空数组，一律判为失败。
- */
-function isRenderableResult(d) {
-  if (!d || typeof d !== 'object') return false;
-  if (d.error) return false;
-  if (!Array.isArray(d.chars)) return false;
-  return visibleChars(d).length > 0;
-}
-
-function render(d) {
-  // 第二道防线：任何调用方（含 auth.js 的历史记录回放）传入无效结果时，
-  // 绝不能把面板渲染成「文体 —、总字数 0」的假成功。
-  if (!isRenderableResult(d)) {
-    showError(
-      '这条记录没有可显示的分析结果（可能生成时调用被中断）。' +
-      (d && d.error ? '原因：' + d.error : '请重新分析该文本。')
-    );
-    return;
-  }
-  document.getElementById('errorBox').innerHTML = '';
-  const res = document.getElementById('result');
-  res.style.display = 'block';
-
-  const chars = visibleChars(d);
-
-  // 元信息卡
-  const meta = document.getElementById('metaGrid');
-  meta.innerHTML = `
-    <div class="meta"><div class="k">文　体</div><div class="v">${esc(d.form || '—')}</div></div>
-    <div class="meta"><div class="k">总字数</div><div class="v">${chars.length}</div></div>
-    <div class="meta"><div class="k">平 / 仄</div><div class="v">${countTone(chars,'平')} / ${countTone(chars,'仄')}</div></div>
-  `;
-
-  // 逐字平仄网格
-  const grid = document.getElementById('pzGrid');
-  grid.innerHTML = chars.map(c => {
-    const t = c.tone;
-    const cls = t === '平' ? 'ping' : t === '仄' ? 'ze' : (t === '—' ? 'punct' : 'flag');
-    const label = t === '—' ? '符' : (t === '通' ? '通' : t);
-    return `<div class="pz-cell ${cls}"><div class="ch">${esc(c.char)}</div><div class="tone">${label}</div></div>`;
-  }).join('');
-
-  // 韵部
-  document.getElementById('yunbu').innerHTML =
-    '<b>所属韵部：</b>' + (d.yunbu && d.yunbu.length ? d.yunbu.join('、') : '—');
-
-  // 点评
-  document.getElementById('note').textContent = '格律点评：' + (d.note || '—');
-
-  // 复制文本
-  document.getElementById('copyText').value = buildCopy(d);
-}
-
-// 供 auth.js 复用同一套渲染逻辑（点击历史记录时回放结果）
-window.renderResult = render;
-
-function countTone(chars, t) {
-  return (chars || []).filter(c => c.tone === t).length;
-}
-
-function buildCopy(d) {
-  const lines = ['【逐字平仄】'];
-  visibleChars(d).forEach(c => {
-    lines.push(`${c.char}（${c.tone}）`);
-  });
-  lines.push('【文体】' + (d.form || '—'));
-  lines.push('【韵部】' + (d.yunbu && d.yunbu.length ? d.yunbu.join('、') : '—'));
-  lines.push('【点评】' + (d.note || '—'));
-  return lines.join('\n');
-}
-
-function copyResult() {
-  const t = document.getElementById('copyText').value;
-  navigator.clipboard.writeText(t).then(() => {
-    // 必须按 id 取：页面上已有多处 .mini-btn，用 querySelector 会取错按钮
-    const b = document.getElementById('btnCopy');
-    const old = b.textContent;
-    b.textContent = '已复制 ✓';
-    setTimeout(() => (b.textContent = old), 1400);
-  });
+    '<div class="err"><b>查询未完成</b><br>' + esc(msg) + '</div>';
 }
 
 function esc(s) {
   return String(s).replace(/[&<>"']/g, m => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
 }
 
-let _progTimer = null;
-const _STEPS = [
-  '正在调用 DeepSeek-V4.1-Flash，已发起请求…',
-  '正在分析文本，逐字标注平仄…',
-  '正在判定文体与韵部归属…',
-  '正在整理结构化结果，即将呈现…'
-];
-let _stepIdx = 0;
-function startProgress() {
-  const box = document.getElementById('progressBox');
-  const el = document.getElementById('progressText');
-  box.style.display = 'block';
-  el.textContent = _STEPS[0];
-  _stepIdx = 0;
-  _progTimer = setInterval(() => {
-    _stepIdx = (_stepIdx + 1) % _STEPS.length;
-    el.textContent = _STEPS[_stepIdx];
-  }, 1400);
+/** 渲染查表结果；查询记录回放时也走这里（window.renderResult） */
+function render(res) {
+  if (!res || !res.ok) {
+    showError('这条记录没有可显示的查询结果（可能保存时数据不完整）。');
+    return;
+  }
+  document.getElementById('errorBox').innerHTML = '';
+  var resBox = document.getElementById('result');
+  resBox.style.display = 'block';
+
+  // 元信息：总字数 + 平/仄/通/未收录
+  document.getElementById('metaGrid').innerHTML =
+    '<div class="meta"><div class="k">总字数</div><div class="v">' + res.total + '</div></div>' +
+    '<div class="meta"><div class="k">平</div><div class="v" style="color:var(--ping)">' + res.ping + '</div></div>' +
+    '<div class="meta"><div class="k">仄</div><div class="v" style="color:var(--ze)">' + res.ze + '</div></div>' +
+    '<div class="meta"><div class="k">通</div><div class="v" style="color:var(--gold)">' + res.tong + '</div></div>' +
+    '<div class="meta"><div class="k">未收录</div><div class="v" style="color:var(--ink-soft)">' + res.unknown + '</div></div>';
+
+  // 逐字平仄：每句一行，未收录字以「？」占位（位置不塌）
+  var gridHtml = '';
+  res.lines.forEach(function (ln) {
+    var cells = ln.cells.map(function (c) {
+      var cls = c.tone === '平' ? 'ping' : c.tone === '仄' ? 'ze' : c.tone === '通' ? 'tong' : 'unknown';
+      var label = c.tone === '通' ? '通' : (c.tone === '' ? '？' : c.tone);
+      return '<div class="pz-cell ' + cls + '"><div class="ch">' + esc(c.ch) + '</div><div class="tone">' + label + '</div></div>';
+    }).join('');
+    var tailPart;
+    if (ln.tailYun.length) {
+      tailPart = '<span class="pz-tail">◆ ' + esc(ln.tail) + '【' + esc(ln.tailYun.join('、')) + '】' +
+        (ln.tailFallback ? '<em>（末字无韵目，回退）</em>' : '') + '</span>';
+    } else {
+      tailPart = '<span class="pz-tail pz-tail-none">◆ ' + esc(ln.tail) + '（未收录）</span>';
+    }
+    gridHtml += '<div class="pz-line">' + cells + tailPart + '</div>';
+  });
+  document.getElementById('pzGrid').innerHTML = gridHtml;
+
+  // 韵部汇总：逐句列出尾字与其韵部
+  var yunHtml = res.lines.map(function (ln, i) {
+    var y = ln.tailYun.length ? ln.tailYun.join('、') : '（尾字未收录）';
+    return '<div class="yun-item"><span class="yun-no">句' + (i + 1) + '</span>◆ ' +
+      esc(ln.tail) + '　<b>' + esc(y) + '</b>' +
+      (ln.tailFallback ? '<span class="yun-fb">（末字无韵目，回退取字）</span>' : '') + '</div>';
+  }).join('');
+  document.getElementById('yunbu').innerHTML = yunHtml || '<span class="hint">无可显示的韵部信息</span>';
+
+  // 重字检查：全文展示，重复字标红（V4.2 口径：字频 ≥2，不做繁简归一）
+  var dupBox = document.getElementById('dupBox');
+  if (res.dupChars.length) {
+    var dupSet = {};
+    res.dupChars.forEach(function (c) { dupSet[c] = 1; });
+    var marked = res.text.split('').map(function (c) {
+      return dupSet[c] ? '<span class="dup-mark">' + esc(c) + '</span>' : esc(c);
+    }).join('');
+    dupBox.innerHTML = '<div class="dup-text">' + marked + '</div>' +
+      '<div class="hint">重复 ' + res.dupChars.length + ' 字：' + res.dupChars.map(esc).join('、') + '</div>';
+  } else {
+    dupBox.innerHTML = '<span class="hint">本段无重复用字</span>';
+  }
+
+  // AI 赏析块：每次新查询都重置为「全关 + 无输出」
+  resetAi();
+
+  // 复制文本
+  document.getElementById('copyText').value = buildCopy(res);
 }
-function stopProgress() {
-  clearInterval(_progTimer);
-  document.getElementById('progressBox').style.display = 'none';
+window.renderResult = render;
+
+function buildCopy(res) {
+  var lines = ['【逐字平仄】'];
+  res.lines.forEach(function (ln) {
+    var cells = ln.cells.map(function (c) { return c.ch + '（' + (c.tone || '？') + '）'; }).join('');
+    var tail = ln.tailYun.length ? '◆ ' + ln.tail + '【' + ln.tailYun.join('、') + '】' : '◆ ' + ln.tail + '（未收录）';
+    lines.push(cells + '　' + tail);
+  });
+  lines.push('【统计】总字数 ' + res.total + ' · 平 ' + res.ping + ' · 仄 ' + res.ze +
+    ' · 通 ' + res.tong + ' · 未收录 ' + res.unknown);
+  lines.push('【重字】' + (res.dupChars.length ? res.dupChars.join('、') : '无'));
+  return lines.join('\n');
+}
+
+function copyResult() {
+  var t = document.getElementById('copyText').value;
+  navigator.clipboard.writeText(t).then(() => {
+    // 必须按 id 取：页面上已有多处 .mini-btn，用 querySelector 会取错按钮
+    var b = document.getElementById('btnCopy');
+    var old = b.textContent;
+    b.textContent = '已复制 ✓';
+    setTimeout(() => (b.textContent = old), 1400);
+  });
+}
+
+/** AI 赏析块重置：两个开关关闭、按钮禁用、输出清空 */
+function resetAi() {
+  [['swAnalysis', 'btnAiAnalysis', 'aiOutAnalysis'],
+   ['swAppreciation', 'btnAiAppreciation', 'aiOutAppreciation']].forEach(function (t) {
+    var sw = document.getElementById(t[0]);
+    var btn = document.getElementById(t[1]);
+    var out = document.getElementById(t[2]);
+    if (sw) sw.checked = false;
+    if (btn) { btn.disabled = true; btn.textContent = t[1] === 'btnAiAnalysis' ? '生成平仄分析' : '生成诗词鉴赏'; }
+    if (out) { out.style.display = 'none'; out.textContent = ''; }
+  });
+}
+
+function wireAiSwitches() {
+  [['swAnalysis', 'btnAiAnalysis', 'aiOutAnalysis'],
+   ['swAppreciation', 'btnAiAppreciation', 'aiOutAppreciation']].forEach(function (t) {
+    var sw = document.getElementById(t[0]);
+    var btn = document.getElementById(t[1]);
+    var out = document.getElementById(t[2]);
+    if (sw && btn) sw.addEventListener('change', function () {
+      btn.disabled = !sw.checked;
+      if (!sw.checked && out) { out.style.display = 'none'; out.textContent = ''; }
+    });
+  });
 }
 
 /**
- * 实时字数提示。
- *
- * 为什么需要：免费版 Serverless 函数 10 秒硬上限，而模型每次要花约 2400 个
- * 推理 token，长文本极易超时。与其让用户等 10 秒后收到一句报错，
- * 不如在输入阶段就把「多少字以内比较稳」讲清楚。
- * 阈值取 40 字：实测该长度内基本能在 10s 内返回。
+ * 生成 AI 赏析（平仄分析 / 诗词鉴赏）。
+ * 防浪费设计：只有勾选开关才会走到这里；未登录先弹登录框（不发请求）；
+ * 401 → 重新弹登录；429 → 弹会员二维码；任何失败都不影响已显示的查表结果。
  */
-var _LEN_COMFORT = 40;
+async function generateAi(type) {
+  var sw = document.getElementById(type === 'analysis' ? 'swAnalysis' : 'swAppreciation');
+  var btn = document.getElementById(type === 'analysis' ? 'btnAiAnalysis' : 'btnAiAppreciation');
+  var out = document.getElementById(type === 'analysis' ? 'aiOutAnalysis' : 'aiOutAppreciation');
+  if (!sw || !sw.checked || !btn || !out) return;
+  if (!lastRes || !lastRes.ok) return;
+  if (btn.disabled) return;
+
+  // 未登录：本地就先拦下，省一次注定 401 的请求
+  if (window.PingzeAuth && !window.PingzeAuth.getUser()) {
+    window.PingzeAuth.openLogin('AI 赏析需要登录后使用；登录后每日免费 3 次。');
+    return;
+  }
+
+  var old = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '生成中…';
+  out.style.display = 'block';
+  out.textContent = '正在请求 AI，请稍候…';
+  try {
+    var headers = { 'Content-Type': 'application/json' };
+    if (window.PingzeAuth) Object.assign(headers, await window.PingzeAuth.authHeaders());
+    var r = await fetch('/api/ai-insight', {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify({
+        type: type,
+        text: lastRawText,
+        table: window.PINGZE_ENGINE.tableText(lastRes),
+      }),
+    });
+    var data = await r.json().catch(function () { return {}; });
+
+    if (r.status === 401 || data.needLogin) {
+      out.style.display = 'none';
+      out.textContent = '';
+      if (window.PingzeAuth) {
+        await window.PingzeAuth.refresh();
+        window.PingzeAuth.openLogin('登录状态已失效，请重新登录后再使用 AI 赏析。');
+      }
+      return;
+    }
+    if (data.error) {
+      out.textContent = '生成失败：' + data.error;
+      // 今日免费额度用尽：顺便把开通会员的二维码弹出来，别让用户卡死在这一步
+      if (data.needUpgrade && window.PingzeAuth && window.PingzeAuth.openUpgradeQr) {
+        window.PingzeAuth.openUpgradeQr(
+          'AI 赏析额度',
+          '今日免费 AI 赏析已用尽（每日 3 次）；会员每日 10 次',
+          '支付后请联系运营人开通，开通后刷新本页即可。'
+        );
+      }
+      return;
+    }
+    if (!data.content) {
+      out.textContent = 'AI 没有返回内容，请重试。';
+      return;
+    }
+    out.textContent = data.content +
+      (typeof data.remaining === 'number' ? '\n\n—— 今日 AI 赏析剩余 ' + data.remaining + ' 次 ——' : '');
+    if (window.PingzeAuth) window.PingzeAuth.loadQuota();
+  } catch (e) {
+    out.textContent = '调用失败：' + (e && e.message ? e.message : e) + '（平仄查询结果不受影响）';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = old;
+  }
+}
+
+/** 保存本次查询记录（未登录则引导登录；入库逻辑在 auth.js） */
+function saveQuery() {
+  if (!lastRes || !lastRes.ok) return;
+  if (window.PingzeAuth) window.PingzeAuth.saveQuery(lastRawText, lastRes);
+}
+
+/**
+ * 实时字数提示（与引擎口径一致：不计空白；上限 1000 字）。
+ * 本地查表是毫秒级返回，不存在超时问题，这里只提示硬上限。
+ */
+var _LEN_MAX = 1000;
 function updateLenHint() {
   var el = document.getElementById('lenHint');
   var ta = document.getElementById('poem');
   if (!el || !ta) return;
-  // 与提交时口径一致：不计空白
-  var n = ta.value.replace(/[\s\u3000]/g, '').length;
+  var n = ta.value.replace(/[ \t\u3000\r]/g, '').length;
   if (!n) { el.textContent = ''; el.className = 'hint len-hint'; return; }
-  if (n <= _LEN_COMFORT) {
+  if (n <= _LEN_MAX) {
     el.textContent = '已输入 ' + n + ' 字';
     el.className = 'hint len-hint';
   } else {
-    el.textContent = '已输入 ' + n + ' 字 · 超过 ' + _LEN_COMFORT +
-      ' 字可能因服务器 10 秒限制而超时，建议分批分析';
+    el.textContent = '已输入 ' + n + ' 字 · 超过 ' + _LEN_MAX + ' 字无法查询，请删减';
     el.className = 'hint len-hint len-warn';
   }
 }
+
+wireAiSwitches();
 </script>
 
 <!-- Supabase 浏览器端 SDK（UMD 版，无需构建步骤）。
-     加载失败时 auth.js 会降级：页面照常分析，只是没有账号功能。 -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="supabase-config.js"></script>
-<script src="auth.js"></script>
+     加载失败时 auth.js 会降级：页面照常查询，只是没有账号功能。 -->
 </body>
 </html>

@@ -150,8 +150,8 @@
         '<td>' + fmt(u.last_sign_in_at) + '</td>' +
         '<td>' + (u.confirmed_at ? '<span class="ok">已确认</span>' : '<span class="warn">未确认</span>') + '</td>' +
         '<td>' + esc(u.provider || 'email') + '</td>' +
-        '<td>' + (u.analysis_count || 0) + '</td>' +
-        '<td>' + (u.api_count || 0) + '</td>' +
+        '<td>' + (u.query_count || 0) + '</td>' +
+        '<td>' + (u.ai_used_today || 0) + '</td>' +
         '<td><button class="ghost tier-btn" data-uid="' + esc(u.id) + '" ' +
             'data-tier="' + esc(u.tier || 'free') + '" ' +
             'data-email="' + esc(u.email) + '">改等级</button></td>' +

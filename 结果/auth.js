@@ -1,11 +1,17 @@
 /**
- * 平仄查询站 · Supabase 前端集成
+ * 平仄查询站 · Supabase 前端集成（V5）
  *
  * 依赖顺序（在 index.html 中）：
  *   supabase UMD → supabase-config.js → 本文件
  *
+ * V5 变化（2026-10-16）：
+ *   · 平仄/韵部查询改为浏览器本地查表（pingze-engine.js），永久免费、不走这里；
+ *   · 「我的分析 / 我的作品」下线， poems / analyses 表已删（迁移 0007）；
+ *   · 新增「查询记录」：登录用户的查询输入+结果存 queries 表（只增/删，不可改）；
+ *   · AI 赏析配额改读 profiles 轻量列（rpc ai_usage_today），不再有 usage_today()。
+ *
  * 降级原则：只要配置缺失或 CDN 没加载成功，整套登录功能静默关闭，
- * 原有的「匿名分析」链路必须照常可用 —— 不能因为接了账号系统就把站搞挂。
+ * 原有的「匿名查表」链路必须照常可用 —— 不能因为接了账号系统就把站搞挂。
  */
 /* global supabase */
 (function () {
@@ -29,15 +35,16 @@
   var mode = 'signin'; // signin | signup
   var lastInput = '';
   var lastResult = null;
-  var currentPoemId = null;
-  // 已经「保存为作品」过的输入文本；用于防止对同一次分析结果重复入库
+  // 已经保存过的查询输入；用于防止对同一次查询结果重复入库
   var savedForInput = '';
-  // 会员/配额状态（由 usage_today() 与后端 429 回包更新）
+  var currentQueryId = null;
+  // 会员/配额状态（由 ai_usage_today() 与后端 429 回包更新）
   var currentTier = 'free';
   var memberExpiresAt = null;
-  // 本次会话里「成功完成的分析次数」——用于免费用户第 2 次分析时弹二维码。
-  // 只在真实分析成功时自增（缓存命中也算一次可见结果，一并计入）。
-  var sessionAnalyses = 0;
+
+  /** 额度说明：免费每日 3 次 AI 赏析，会员每日 10 次（迁移 0007_v5_query_engine.sql）。
+   *  查表功能本身永久免费、不计次。 */
+  var DAILY_QUOTA = 10;
 
   function $(id) {
     return document.getElementById(id);
@@ -62,15 +69,15 @@
     return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
       ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
   }
-  function summarize(data) {
-    if (!data || !Array.isArray(data.chars)) return null;
-    var ping = 0, ze = 0, tong = 0;
-    data.chars.forEach(function (c) {
-      if (c.tone === '平') ping++;
-      else if (c.tone === '仄') ze++;
-      else if (c.tone === '通') tong++;
+  /** 从查表结果里提取统计数字（供记录列表标签用） */
+  function summarize(result) {
+    if (!result || !result.ok) return null;
+    return { ping: result.ping || 0, ze: result.ze || 0, tong: result.tong || 0, total: result.total || 0 };
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (m) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
     });
-    return { ping: ping, ze: ze, tong: tong, form: data.form || null };
   }
 
   // ---------------------------------------------------------------- 会话
@@ -86,7 +93,7 @@
     }
   }
 
-  /** 给 /api/analyze 用的请求头；未登录返回空对象 */
+  /** 给 /api/ai-insight 用的请求头；未登录返回空对象 */
   async function authHeaders() {
     var t = await getToken();
     return t ? { Authorization: 'Bearer ' + t } : {};
@@ -96,10 +103,10 @@
     if (!client) {
       currentUser = null;
       setDisplay('btnLogout', false);
-      setDisplay('btnHistory', false);
+      setDisplay('btnRecords', false);
       setDisplay('btnAuth', true);
-      var info = $('userInfo');
-      if (info) info.textContent = '未登录 · 分析功能需先登录';
+      var info0 = $('userInfo');
+      if (info0) info0.textContent = '未登录 · 查表免费，登录后可保存查询记录';
       return;
     }
     var res = await client.auth.getSession();
@@ -108,36 +115,40 @@
 
     setDisplay('btnAuth', !currentUser, 'inline-block');
     setDisplay('btnLogout', !!currentUser, 'inline-block');
-    setDisplay('btnHistory', !!currentUser, 'inline-block');
-    setDisplay('btnWorks', !!currentUser, 'inline-block');
-    setDisplay('btnSavePoem', !!currentUser && !!lastInput, 'inline-block');
+    setDisplay('btnRecords', !!currentUser, 'inline-block');
+    setDisplay('btnSaveQuery', !!currentUser && !!lastInput, 'inline-block');
 
     var label = $('userInfo');
     if (label) {
       if (!currentUser) {
-        label.textContent = '未登录 · 分析功能需先登录';
+        label.textContent = '未登录 · 查表免费，登录后可保存查询记录';
       } else {
         label.textContent = '已登录：' + (currentUser.email || '诗友');
       }
     }
+    var quota = $('quotaInfo');
+    if (quota && !currentUser) quota.textContent = '';
+    var saveTip = $('saveTip');
+    if (saveTip && !currentUser && !savedForInput) {
+      saveTip.textContent = '匿名查询不保存记录；登录后可保存入数据库，随时回看';
+      saveTip.className = '';
+    }
     if (currentUser) loadQuota();
   }
 
-  /** 调用 SQL 函数 usage_today() 显示今日用量；配额按北京时间自然日重置 */
+  /** 调用 SQL 函数 ai_usage_today() 显示今日 AI 赏析用量；按北京时间自然日重置 */
   async function loadQuota() {
-    if (!client) return;
+    if (!client || !currentUser) return;
     try {
-      var res = await client.rpc('usage_today');
+      var res = await client.rpc('ai_usage_today');
       var data = res && res.data;
       if (data) {
-        currentTier = data.tier || 'free';
-        memberExpiresAt = data.member_expires_at || null;
+        currentTier = data.quota >= DAILY_QUOTA ? 'member' : 'free';
       }
       var node = $('quotaInfo');
       if (node && data) {
         var label = currentTier === 'member' ? '会员' : '免费';
-        node.textContent = label + '· 今日用量 ' + data.used + '/' + data.quota +
-          '（剩余 ' + data.remaining + '，缓存命中不计费）';
+        node.textContent = label + ' · AI 赏析剩余 ' + data.remaining + '/' + data.quota;
       }
     } catch (e) {
       /* 配额显示是锦上添花，失败就算了 */
@@ -164,37 +175,6 @@
     setDisplay('qrModal', false);
   }
 
-  /**
-   * 在「开始一次分析之前」决定是否要拦下来弹二维码。
-   * 规则：免费用户今天已经用过 ≥1 次（或本会话已分析过 ≥1 次），再点分析就弹二维码。
-   *
-   * 以服务端 usage_today() 的 used 为准（防刷新页面绕过），本会话计数作兜底。
-   * 返回 true 表示已弹出、调用方应中断本次分析。
-   */
-  async function maybePromptUpgrade() {
-    if (!currentUser) return false;
-    if (isMember()) return false;
-
-    var used = sessionAnalyses;
-    try {
-      var res = await client.rpc('usage_today');
-      if (res && res.data) {
-        if (typeof res.data.used === 'number') used = Math.max(used, res.data.used);
-        currentTier = res.data.tier || currentTier;
-        memberExpiresAt = res.data.member_expires_at || memberExpiresAt;
-        if (isMember()) return false; // 刚变成会员就不拦
-      }
-    } catch (e) { /* 查询失败就用本地计数兜底 */ }
-
-    if (used < 1) return false;
-    openQr(
-      '开通会员',
-      '免费用户每天可分析 1 次，会员每天 10 次',
-      '支付后请联系运营人开通，开通后刷新本页即可。'
-    );
-    return true;
-  }
-
   // ---------------------------------------------------------------- 登录 / 注册
 
   function openModal() {
@@ -204,30 +184,16 @@
     tip('');
   }
 
-  /**
-   * 执行分析前调用：未登录就弹登录框并返回 false，让调用方直接中断。
-   *
-   * 认证没配置好（READY=false）时不拦 —— 那种情况下拦了等于整站不可用。
-   * 注意这只是体验层拦截，真正的强制在后端（/api/analyze 会返回 401）。
-   */
-  async function requireLogin() {
-    if (!READY) return true;
-    // session 可能刚好过期，先刷新一次再判断，别拿旧状态放行
-    if (!currentUser) await refresh();
-    if (currentUser) return true;
+  /** 打开登录框，可带一句场景化说明（如保存记录、AI 赏析需要登录） */
+  function openLogin(tipMsg) {
     setMode('signin');
     openModal();
-    tip('分析功能需要先登录。注册后立即可用，每日 ' + DAILY_QUOTA + ' 次额度。', false);
-    return false;
+    tip(tipMsg || '登录后查询记录可保存入数据库，便于后续浏览。', false);
   }
   function closeModal() {
     setDisplay('authModal', false);
   }
   window.closeAuthModal = closeModal;
-
-  /** 额度说明。真正的额度来自后端与数据库 usage_today()：
-   *  免费用户每日 1 次、会员每日 10 次（见迁移 0006_membership.sql）。 */
-  var DAILY_QUOTA = 10;
 
   function setMode(next) {
     mode = next;
@@ -236,7 +202,7 @@
     var note = $('authQuotaNote');
     if (note) {
       note.textContent = (isSignIn ? '登录后' : '注册后') +
-        '每日可免费分析 1 次；开通会员每日可分析 ' + DAILY_QUOTA + ' 次';
+        '查询记录可保存；AI 平仄分析 / 诗词鉴赏每日免费 3 次，会员 ' + DAILY_QUOTA + ' 次';
     }
     if ($('authSubmit')) $('authSubmit').textContent = isSignIn ? '登　录' : '注　册';
     if ($('authSwitch')) $('authSwitch').textContent = isSignIn ? '没有账号？去注册' : '已有账号？去登录';
@@ -302,30 +268,87 @@
   async function signOut() {
     if (client) await client.auth.signOut();
     currentUser = null;
-    currentPoemId = null;
-    setDisplay('historyCard', false);
-    setDisplay('worksCard', false);
+    lastInput = '';
+    lastResult = null;
+    savedForInput = '';
+    currentQueryId = null;
+    setDisplay('recordsCard', false);
     await refresh();
   }
 
-  // ---------------------------------------------------------------- 我的分析
+  // ---------------------------------------------------------------- 查询记录（queries 表）
 
-  async function loadHistory() {
-    var list = $('historyList');
-    var card = $('historyCard');
+  /**
+   * 保存本次查询记录（input_text + 查表结果 jsonb）。
+   * 表上 RLS：本人可读 / 本人可建 / 本人可删，无 UPDATE —— 记录不可篡改。
+   */
+  async function saveQuery() {
+    if (!READY) {
+      var off = $('saveTip');
+      if (off) { off.textContent = '账号功能未启用，暂不能保存查询记录'; off.className = ''; }
+      return;
+    }
+    if (!currentUser) {
+      openLogin('登录后查询记录可保存入数据库，便于后续浏览。');
+      return;
+    }
+    if (!lastInput || !lastResult || !lastResult.ok) return;
+
+    var btn = $('btnSaveQuery');
+    var node = $('saveTip');
+
+    // 防重复入库：已为「本次查询结果」保存过就不再重复插
+    if (currentQueryId && savedForInput === lastInput) {
+      if (node) { node.textContent = '本次查询已保存到「查询记录」'; node.className = 'ok'; }
+      return;
+    }
+    if (btn && btn.disabled) return;
+
+    if (btn) { btn.disabled = true; btn.textContent = '保存中…'; }
+    if (node) { node.textContent = ''; node.className = ''; }
+
+    try {
+      var res = await client
+        .from('queries')
+        .insert({
+          user_id: currentUser.id,
+          input_text: String(lastInput).slice(0, 1000),
+          result: lastResult,
+        })
+        .select('id')
+        .single();
+
+      if (res.error) {
+        if (node) { node.textContent = '保存失败：' + prettyError(res.error); node.className = ''; }
+        return;
+      }
+      currentQueryId = res.data && res.data.id;
+      savedForInput = lastInput;
+      if (node) { node.textContent = '已保存到「查询记录」✓'; node.className = 'ok'; }
+      // 若「查询记录」面板正开着，把这条新保存的也刷进去
+      var card = $('recordsCard');
+      if (card && card.style.display === 'block') loadRecords();
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '☆ 保存本次查询'; }
+    }
+  }
+
+  async function loadRecords() {
+    var list = $('recordsList');
+    var card = $('recordsCard');
     if (!card || !list) return;
 
     if (!currentUser) {
       card.style.display = 'block';
-      list.innerHTML = '<span class="hint">登录后才能查看自己的分析记录。</span>';
+      list.innerHTML = '<span class="hint">登录后才能查看查询记录。</span>';
       return;
     }
     card.style.display = 'block';
     list.innerHTML = '<span class="hint">载入中…</span>';
 
     var res = await client
-      .from('analyses')
-      .select('id, created_at, input_text, result, summary')
+      .from('queries')
+      .select('id, created_at, input_text, result')
       .order('created_at', { ascending: false })
       .limit(20);
 
@@ -335,30 +358,33 @@
     }
     var rows = res.data || [];
     if (!rows.length) {
-      list.innerHTML = '<span class="hint">还没有分析记录。分析一次诗词后就会出现在这里。</span>';
+      list.innerHTML = '<span class="hint">还没有查询记录。查询后点「☆ 保存本次查询」即可收藏到这里。</span>';
       return;
     }
 
     var html = '';
     rows.forEach(function (r) {
-      var s = summarize(r.result) || summarize({ chars: [] });
+      var s = summarize(r.result);
       // 显示全部输入文本（不截断、不折叠换行）
       var preview = String(r.input_text || '');
       html += '<div class="hist-item" data-id="' + r.id + '">' +
-        '<div class="hist-meta">' + formatTime(r.created_at) +
-        (s.form ? ' · ' + escapeHtml(s.form) : '') + '</div>' +
+        '<div class="hist-meta">' + formatTime(r.created_at) + '</div>' +
         '<div class="hist-text">' + escapeHtml(preview) + '</div>' +
-        '<div class="hist-tags"><span class="tone-ping">平 ' + s.ping + '</span>' +
-        '<span class="tone-ze">仄 ' + s.ze + '</span>' +
-        (s.tong ? '<span class="tone-tong">通 ' + s.tong + '</span>' : '') + '</div>' +
+        '<div class="hist-tags"><span class="tone-ping">平 ' + (s ? s.ping : 0) + '</span>' +
+        '<span class="tone-ze">仄 ' + (s ? s.ze : 0) + '</span>' +
+        (s && s.tong ? '<span class="tone-tong">通 ' + s.tong + '</span>' : '') +
+        '<button class="mini-btn rec-del" data-act="del" title="删除这条记录">删除</button></div>' +
         '</div>';
     });
     list.innerHTML = html;
 
     Array.prototype.forEach.call(list.querySelectorAll('.hist-item'), function (node) {
-      node.addEventListener('click', function () {
-        var row = rows.filter(function (x) { return x.id === node.getAttribute('data-id'); })[0];
-        if (!row) return;
+      var id = node.getAttribute('data-id');
+      var row = rows.filter(function (x) { return x.id === id; })[0];
+      if (!row) return;
+      // 点正文：把原文载回输入框，并把当时保存的查表结果重新渲染出来
+      var textNode = node.querySelector('.hist-text');
+      if (textNode) textNode.addEventListener('click', function () {
         var ta = $('poem');
         if (ta) ta.value = row.input_text || '';
         if (row.result && typeof window.renderResult === 'function') {
@@ -366,195 +392,28 @@
         }
         window.scrollTo({ top: 0, behavior: 'smooth' });
       });
-    });
-  }
-
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, function (m) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
-    });
-  }
-
-  // ---------------------------------------------------------------- 保存作品
-
-  async function savePoem() {
-    if (!currentUser) return openModal();
-    if (!lastInput) return;
-
-    var btn = $('btnSavePoem');
-    var node = $('saveTip');
-
-    // 防重复入库：已为「本次分析结果」保存过就不再重复插
-    if (currentPoemId && savedForInput === lastInput) {
-      if (node) { node.textContent = '本次结果已保存到「我的作品」'; node.className = 'ok'; }
-      return;
-    }
-    if (btn && btn.disabled) return;
-
-    if (btn) { btn.disabled = true; btn.textContent = '保存中…'; }
-    if (node) { node.textContent = ''; node.className = ''; }
-
-    // 自动取首句当标题：截到第一个标点为止
-    var raw = lastInput.replace(/[\r\n]+/g, ' ').trim();
-    var firstCut = raw.split(/[，。；！？、,.!?;:\s]/)[0];
-    var title = (firstCut || raw).slice(0, 40) || '无题';
-
-    try {
-      var res = await client
-        .from('poems')
-        .insert({
-          user_id: currentUser.id,
-          title: title,
-          body: lastInput.slice(0, 1000),
-          form: (lastResult && lastResult.form) || null,
-          origin: 'original',
-        })
-        .select('id')
-        .single();
-
-      if (res.error) {
-        if (node) { node.textContent = '保存失败：' + prettyError(res.error); node.className = ''; }
-        return;
-      }
-      currentPoemId = res.data && res.data.id;
-      savedForInput = lastInput;
-      if (node) { node.textContent = '已保存到「我的作品」✓'; node.className = 'ok'; }
-      // 保存状态保持常驻，不再自动清空：用户可能隔一会儿才回来看是否存上了。
-      // 下一次分析（onAnalysisDone 换新文本）会统一重置。
-      // 若「我的作品」面板正开着，把这条新保存的也刷进去
-      var wcard = $('worksCard');
-      if (wcard && wcard.style.display === 'block') loadWorks();
-    } finally {
-      if (btn) { btn.disabled = false; btn.textContent = '☆ 保存为作品'; }
-    }
-  }
-
-  // ---------------------------------------------------------------- 我的作品
-
-  var editingId = null;
-
-  async function loadWorks() {
-    var list = $('worksList');
-    var card = $('worksCard');
-    if (!card || !list) return;
-
-    if (!currentUser) {
-      card.style.display = 'block';
-      list.innerHTML = '<span class="hint">登录后才能查看自己的作品。</span>';
-      return;
-    }
-    card.style.display = 'block';
-    list.innerHTML = '<span class="hint">载入中…</span>';
-
-    var res = await client
-      .from('poems')
-      .select('id, title, body, form, created_at, updated_at')
-      .order('updated_at', { ascending: false })
-      .limit(50);
-
-    if (res.error) {
-      list.innerHTML = '<span class="hint">读取失败：' + prettyError(res.error) + '</span>';
-      return;
-    }
-    var rows = res.data || [];
-    if (!rows.length) {
-      list.innerHTML = '<span class="hint">还没有作品。分析完一首诗后点「保存为作品」即可收藏到这里。</span>';
-      return;
-    }
-
-    var html = '';
-    rows.forEach(function (r) {
-      // 显示全部正文（不截断、不折叠换行）
-      var preview = String(r.body || '');
-      html += '<div class="work-item" data-id="' + r.id + '">' +
-        '<div class="work-main">' +
-          '<div class="work-title">' + escapeHtml(r.title || '无题') +
-            (r.form ? '<span class="work-form">' + escapeHtml(r.form) + '</span>' : '') + '</div>' +
-          '<div class="work-text">' + escapeHtml(preview) + '</div>' +
-          '<div class="hist-meta">更新于 ' + formatTime(r.updated_at || r.created_at) + '</div>' +
-        '</div>' +
-        '<div class="work-actions">' +
-          '<button class="mini-btn" data-act="edit">编辑</button>' +
-          '<button class="mini-btn" data-act="del">删除</button>' +
-        '</div>' +
-      '</div>';
-    });
-    list.innerHTML = html;
-
-    Array.prototype.forEach.call(list.querySelectorAll('.work-item'), function (node) {
-      var id = node.getAttribute('data-id');
-      var row = rows.filter(function (x) { return x.id === id; })[0];
-      if (!row) return;
-      // 点正文区：把作品载回上方输入框，便于重新分析
-      node.querySelector('.work-main').addEventListener('click', function () {
-        var ta = $('poem');
-        if (ta) ta.value = row.body || '';
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      });
-      node.querySelector('[data-act="edit"]').addEventListener('click', function (e) {
+      var del = node.querySelector('[data-act="del"]');
+      if (del) del.addEventListener('click', function (e) {
         e.stopPropagation();
-        openEditModal(row);
-      });
-      node.querySelector('[data-act="del"]').addEventListener('click', function (e) {
-        e.stopPropagation();
-        deletePoem(row);
+        deleteRecord(row.id);
       });
     });
   }
 
-  function openEditModal(row) {
-    editingId = row.id;
-    if ($('workEditTitle')) $('workEditTitle').value = row.title || '';
-    if ($('workEditBody')) $('workEditBody').value = row.body || '';
-    if ($('workEditForm')) $('workEditForm').value = row.form || '';
-    var tipNode = $('workEditTip');
-    if (tipNode) tipNode.textContent = '';
-    setDisplay('worksModal', true, 'flex');
-  }
-  function closeEditModal() {
-    editingId = null;
-    setDisplay('worksModal', false);
-  }
-
-  async function saveEdit() {
-    if (!editingId) return;
-    var title = (($('workEditTitle') || {}).value || '').trim();
-    var body = (($('workEditBody') || {}).value || '').trim();
-    var form = (($('workEditForm') || {}).value || '').trim();
-    if (!body) {
-      var t = $('workEditTip');
-      if (t) t.textContent = '正文不能为空';
-      return;
-    }
-    var tipNode = $('workEditTip');
-    if (tipNode) tipNode.textContent = '保存中…';
-    var res = await client
-      .from('poems')
-      .update({
-        title: (title || body.split(/[，。；！？、,.!?;:\s]/)[0] || '无题').slice(0, 60),
-        body: body.slice(0, 1000),
-        form: form || null,
-      })
-      .eq('id', editingId);
-    if (res.error) {
-      if (tipNode) tipNode.textContent = '保存失败：' + prettyError(res.error);
-      return;
-    }
-    closeEditModal();
-    // 保存成功后刷新列表（更新时间会变化，需重读）
-    var card = $('worksCard');
-    if (card && card.style.display === 'block') loadWorks();
-  }
-
-  async function deletePoem(row) {
-    if (!confirm('确定删除《' + (row.title || '无题') + '》？此操作不可恢复。')) return;
-    var res = await client.from('poems').delete().eq('id', row.id);
+  async function deleteRecord(id) {
+    if (!confirm('确定删除这条查询记录？此操作不可恢复。')) return;
+    var res = await client.from('queries').delete().eq('id', id);
     if (res.error) {
       alert('删除失败：' + prettyError(res.error));
       return;
     }
-    var card = $('worksCard');
-    if (card && card.style.display === 'block') loadWorks();
+    // 如果刚删的正是当前结果区展示的那条保存记录，重置防重复标记
+    if (currentQueryId === id) {
+      currentQueryId = null;
+      savedForInput = '';
+    }
+    var card = $('recordsCard');
+    if (card && card.style.display === 'block') loadRecords();
   }
 
   // ---------------------------------------------------------------- 对外接口
@@ -564,82 +423,56 @@
     client: client,
     /** 给 fetch 用的鉴权头 */
     authHeaders: authHeaders,
-    /** 后端用来把这次分析挂到作品上 */
-    getPoemId: function () {
-      return currentPoemId;
-    },
     getUser: function () {
       return currentUser;
     },
-    /** 每次分析完成后由 index.html 回调 */
-    onAnalysisDone: function (input, result) {
+    /** 每次查询完成后由 index.html 回调 */
+    onQueryDone: function (input, result) {
       lastInput = input || '';
       lastResult = result || null;
-      // 换了新的分析结果 -> 视为一件新作品，重新允许「保存为作品」
+      // 换了新的查询结果 -> 重新允许「保存本次查询」
       if (lastInput !== savedForInput) {
-        currentPoemId = null;
+        currentQueryId = null;
         savedForInput = '';
-        var tip = $('saveTip');
-        if (tip) { tip.textContent = ''; tip.className = ''; }
+        var tipNode = $('saveTip');
+        if (tipNode && currentUser) { tipNode.textContent = ''; tipNode.className = ''; }
       }
-      sessionAnalyses += 1; // 供 maybePromptUpgrade 判断「第 2 次」
-      setDisplay('btnSavePoem', !!currentUser && !!lastInput, 'inline-block');
+      setDisplay('btnSaveQuery', !!currentUser && !!lastInput, 'inline-block');
       if (currentUser) loadQuota();
-      // 面板正开着的话要立刻把这条新记录刷进去。
-      // 后端是写库成功后才返回结果的，所以这里查一定能查到。
-      var card = $('historyCard');
-      if (currentUser && card && card.style.display === 'block') loadHistory();
+      // 面板正开着的话要立刻把这条新记录刷进去
+      var card = $('recordsCard');
+      if (currentUser && card && card.style.display === 'block') loadRecords();
     },
-    openLogin: openModal,
-    /** 分析前调用：未登录会弹登录框并返回 false */
-    requireLogin: requireLogin,
-    /**
-     * 分析开始前的会员拦截：免费用户第 2 次分析返回 true（已弹二维码）。
-     * 注意这只是体验层，真正的额度强制在后端（超额返回 429）。
-     */
-    shouldBlockForUpgrade: maybePromptUpgrade,
+    /** 保存本次查询记录（未登录会先弹登录框） */
+    saveQuery: saveQuery,
+    openLogin: openLogin,
     /** 会员/配额状态 */
     isMember: isMember,
     getTier: function () { return currentTier; },
     openUpgradeQr: openQr,
     closeUpgradeQr: closeQr,
+    loadQuota: loadQuota,
     refresh: refresh,
-    /** 刷新「我的作品」列表（面板开着时由 savePoem 回调） */
-    loadWorks: loadWorks,
+    /** 刷新「查询记录」列表 */
+    loadRecords: loadRecords,
   };
 
   // ---------------------------------------------------------------- 初始化
 
   function wire() {
     if ($('btnAuth')) $('btnAuth').addEventListener('click', function () {
-      setMode('signin');
-      openModal();
+      openLogin();
     });
     if ($('btnLogout')) $('btnLogout').addEventListener('click', signOut);
-    if ($('btnHistory')) $('btnHistory').addEventListener('click', function () {
-      var card = $('historyCard');
+    if ($('btnRecords')) $('btnRecords').addEventListener('click', function () {
+      var card = $('recordsCard');
       if (card && card.style.display === 'block') {
         card.style.display = 'none';
       } else {
-        loadHistory();
+        loadRecords();
       }
     });
-    if ($('btnSavePoem')) $('btnSavePoem').addEventListener('click', savePoem);
-    if ($('btnWorks')) $('btnWorks').addEventListener('click', function () {
-      var card = $('worksCard');
-      if (card && card.style.display === 'block') {
-        card.style.display = 'none';
-      } else {
-        loadWorks();
-      }
-    });
-    if ($('workEditSave')) $('workEditSave').addEventListener('click', saveEdit);
-    if ($('workEditCancel')) $('workEditCancel').addEventListener('click', closeEditModal);
-    if ($('worksModal')) {
-      $('worksModal').addEventListener('click', function (e) {
-        if (e.target === $('worksModal')) closeEditModal();
-      });
-    }
+    if ($('btnSaveQuery')) $('btnSaveQuery').addEventListener('click', saveQuery);
     if ($('authSubmit')) $('authSubmit').addEventListener('click', submitAuth);
     if ($('authSwitch')) $('authSwitch').addEventListener('click', function () {
       setMode(mode === 'signin' ? 'signup' : 'signin');

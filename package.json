@@ -1,7 +1,7 @@
 {
   "name": "pingze-query",
   "version": "1.0.0",
-  "description": "平仄格律查询站 · DeepSeek 驱动，含账号体系、分析历史、我的作品、会员配额与管理后台（本地 / Netlify 部署）",
+  "description": "平仄韵目查询站 · 本地字典查表（平水韵 106 韵）+ 可选 AI 赏析，含账号体系、查询记录、会员配额与管理后台（本地 / Netlify 部署）",
   "private": true,
   "scripts": {
     "start": "node server.local.js",

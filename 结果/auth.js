@@ -354,6 +354,22 @@
   }
 
   /**
+   * 保存流程的收尾动作：确保「查询记录」面板打开且内容是最新的。
+   * 原本关着 -> 打开并滚过去；原本开着 -> 只刷新内容
+   * （用户就在面板附近，再滚一次反而打断他）。
+   *
+   * 独立成函数的原因：这条链路有两个入口都会用到 ——
+   * 新插入成功、以及「本次查询早就存过了」（此时不该重复插，
+   * 但用户点了保存，意图就是「看到记录」，面板必须照常打开刷新）。
+   */
+  async function openAndRefreshRecords() {
+    var wasOpen = recordsOpen();
+    showRecords(true);
+    await loadRecords();
+    if (!wasOpen) scrollToRecords();
+  }
+
+  /**
    * 保存本次查询记录（input_text + 查表结果 jsonb）。
    * 表上 RLS：本人可读 / 本人可建 / 本人可删，无 UPDATE —— 记录不可篡改。
    */
@@ -372,9 +388,13 @@
     var btn = $('btnSaveQuery');
     var node = $('saveTip');
 
-    // 防重复入库：已为「本次查询结果」保存过就不再重复插
+    // 防重复入库：已为「本次查询结果」保存过就不再重复插。
+    // ★ 但仍要走打开 + 刷新：AI 赏析入库时 ensureQuerySaved() 会静默补一条
+    //   queries 记录并置上这里的标记，用户随后点「保存本次查询」正会命中本分支，
+    //   若在这里直接 return，面板就永远打不开（2026-10-16 回归的原因）。
     if (currentQueryId && savedForInput === lastInput) {
       if (node) { node.textContent = '本次查询已保存到「查询记录」'; node.className = 'ok'; }
+      await openAndRefreshRecords();
       return;
     }
     if (btn && btn.disabled) return;
@@ -391,12 +411,8 @@
       currentQueryId = r.id;
       savedForInput = lastInput;
       if (node) { node.textContent = '已保存到「查询记录」✓'; node.className = 'ok'; }
-      // 保存成功后自动打开「查询记录」面板并刷新内容；
-      // 面板原本关着时才额外滚动过去（已开着说明用户就在面板附近，只刷内容）
-      var wasOpen = recordsOpen();
-      showRecords(true);
-      await loadRecords();
-      if (!wasOpen) scrollToRecords();
+      // 保存成功后自动打开「查询记录」面板并刷新内容
+      await openAndRefreshRecords();
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = '☆ 保存本次查询'; }
     }

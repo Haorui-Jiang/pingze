@@ -1,0 +1,17 @@
+-- V5.1：数据库默认时区改为东八区（Asia/Shanghai，全年 UTC+8、无夏令时）
+--
+-- 背景：timestamptz 内部始终以 UTC 绝对时间存储，其文本渲染（Supabase
+-- Dashboard Table Editor / PostgREST / SQL Editor）由会话时区决定；项目
+-- 默认 UTC，导致 created_at 等字段显示 +00。本迁移改库级默认时区。
+--
+-- 影响面（已逐项核查）：
+--   · 存储值不变（内部 UTC 绝对时间），已有数据渲染自动换算，无需 UPDATE；
+--   · 显式 at time zone 'Asia/Shanghai' 的表达式（ai_usage_today /
+--     ai_quota_consume 的按日重置）不受影响；
+--   · 带显式偏移的时间串（如 lib/auth.js 限流窗口的 ...Z）与 timestamptz
+--     做绝对比较，不受影响；
+--   · 前端 new Date(iso) 解析带偏移 ISO 串结果不变（admin/auth 的 fmt
+--     本就固定按东八区渲染）。
+-- 注意：ALTER DATABASE 只影响新会话；连接池（Supavisor）中的旧会话需
+--   重连后才生效，通常数分钟内随连接轮换完成。
+ALTER DATABASE postgres SET timezone TO 'Asia/Shanghai';

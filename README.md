@@ -2,7 +2,7 @@
 
 [![Node](https://img.shields.io/badge/Node-20%2B-339933)](https://nodejs.org)
 [![Engine](https://img.shields.io/badge/Engine-Local%20Dictionary-8b5a2b)](./结果/pingze-engine.js)
-[![DeepSeek](https://img.shields.io/badge/LLM-DeepSeek--V4.1--Flash-4d6bfe)](https://www.deepseek.com)
+[![DeepSeek](https://img.shields.io/badge/LLM-DeepSeek--Chat-4d6bfe)](https://www.deepseek.com)
 [![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3ecf8e)](https://supabase.com)
 [![Netlify](https://img.shields.io/badge/Deploy-Netlify-00c7b7)](https://www.netlify.com)
 [![License](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
@@ -72,10 +72,13 @@
 | 本地后端 | Node.js 20+ 原生 `http` + `fetch`（`server.local.js`） |
 | 线上后端 | Netlify Serverless Functions（`netlify/functions/`） |
 | 数据库 / 认证 | Supabase（Postgres + Auth + RLS） |
-| 大模型 | DeepSeek-V4.1-Flash（接口 ID `deepseek-flash`，仅 AI 赏析用） |
+| 大模型 | DeepSeek-Chat（接口 ID `deepseek-chat`，仅 AI 赏析用） |
 
-> **模型 ID 说明**：DeepSeek 接口只接受小写 ID（`deepseek-flash` / `deepseek-v4-pro`），
+> **模型 ID 说明**：DeepSeek 接口只接受小写 ID（`deepseek-chat` / `deepseek-flash` / `deepseek-v4-pro`），
 > 不接受展示名。代码里用 `MODEL_ALIAS` 做映射，`DEEPSEEK_MODEL` 填展示名或 ID 均可。
+> **默认 `deepseek-chat`（非推理型，约 2-4s 返回）**：`deepseek-flash`（V4.1-Flash）是推理型模型，
+> 每次先输出 2000-4000 个 reasoning tokens 才给正文，单次 14-26s，会越过 Netlify 函数时限
+> 被网关杀成 504 空响应（2026-10-16 线上事故），**勿在 Serverless 环境使用**。
 
 ---
 
@@ -142,7 +145,7 @@ npm run dev               # 等价于 node --watch server.local.js（改代码�
 
 ```bash
 curl http://localhost:3000/api/health
-# {"ok":true,"model":"deepseek-flash","keyReady":true,"supabase":true,"note":"平仄/韵部查询为浏览器本地查表，不经过本服务；AI 赏析需登录并按次计配额"}
+# {"ok":true,"model":"deepseek-chat","keyReady":true,"supabase":true,"note":"平仄/韵部查询为浏览器本地查表，不经过本服务；AI 赏析需登录并按次计配额"}
 ```
 
 `keyReady` / `supabase` 可快速判断 `.env` 是否生效。端口被占用时用 `PORT=3001 npm start`。
@@ -210,8 +213,10 @@ command = "node scripts/gen-supabase-config.js"
 | `SUPABASE_SERVICE_KEY` | service_role key，**只放服务端** | ✅ |
 | `SUPABASE_ANON_KEY` | anon public key，**构建时注入前端**（不是函数运行时用的） | ✅ |
 | `ADMIN_EMAILS` | 管理后台邮箱白名单，逗号分隔。未配置时**任何人都进不去**（fail-closed） | ✅ |
-| `DEEPSEEK_MODEL` / `DEEPSEEK_BASE_URL` | 默认 `DeepSeek-V4.1-Flash` / `https://api.deepseek.com` | 可选 |
-| `FUNCTION_TIMEOUT_MS` | AI 赏析单次超时，默认 `9000`（适配 Netlify 免费版 10s 硬上限；Pro 可到 `25000`） | 可选 |
+| `DEEPSEEK_MODEL` / `DEEPSEEK_BASE_URL` | 默认 `deepseek-chat` / `https://api.deepseek.com` | 可选 |
+| `FUNCTION_TIMEOUT_MS` | AI 赏析的**全函数总预算**（毫秒），默认 `8000`。冷启动、Supabase 往返、模型调用、序列化都从这算；实际生效值 = `min(FUNCTION_TIMEOUT_MS, PLATFORM_LIMIT_MS - 500)` | 可选 |
+| `PLATFORM_LIMIT_MS` | 部署平台对同步函数的硬限时，默认 `10000`（Netlify 免费版 10s；Pro 可到 `26000`，同时调大 `FUNCTION_TIMEOUT_MS`） | 可选 |
+| `SUPABASE_TIMEOUT_MS` | Supabase 单次请求超时，默认 `5000`（防止卡住吃掉 AI 接口的整个预算） | 可选 |
 | `REGISTER_MAX_PER_IP` / `REGISTER_MAX_PER_HOUR` | 注册风控上限 | 可选 |
 | `NODE_VERSION` | 建议 `20` | 建议 |
 
@@ -221,6 +226,9 @@ command = "node scripts/gen-supabase-config.js"
 
 > **函数超时**：Netlify 免费版硬上限 10 秒。V5 起平仄查询不经过服务端（浏览器本地毫秒级返回），
 > 超时只可能影响 AI 赏析单次生成，且失败不影响已展示的查表结果。
+> AI 接口的超时是「全函数总预算」：调用方在函数入口传入 deadline（冷调用把容器启动时间也计入），
+> 任何阶段超时都在平台杀进程之前返回结构化 JSON 错误（`{"ok":false,"status":504,...}`），
+> 前端显示人话提示，不会再出现 504 空响应配「AI 没有返回内容」的困惑组合。
 
 ### 🔎 百度站点验证（两种方式并存，互为备用）
 
@@ -351,6 +359,9 @@ AI 配额的扣减只走 security definer 的 `ai_quota_consume(uuid)` RPC，前
 - **查表引擎刻意不做**文体判定、格律校验、马蹄韵与上下文消歧——与 V4.2 口径一致；
   这些分析交给可选的 AI 赏析，且仅作提示。
 - **韵表未收录的字**（后起字 / 异体字）以「？」占位，位置不塌；重字不做繁简归一（云 ≠ 雲）。
+- **AI 赏析默认用非推理模型**（`deepseek-chat`）：推理型模型（`deepseek-flash`）单次要 14-26s，
+  在 Serverless 时限内必被网关杀成 504；若改用推理模型，需同时调大 `FUNCTION_TIMEOUT_MS`
+  与 `PLATFORM_LIMIT_MS`（Pro 26s 额度），且仍可能超时——超时按次扣配额，防止重试循环烧钱。
 - **本仓库只收录程序本体**：批量清库、冒烟测试等运维脚本属于开发过程产物，未纳入。
 
 ---

@@ -2,7 +2,7 @@
 
 [![Node](https://img.shields.io/badge/Node-20%2B-339933)](https://nodejs.org)
 [![Engine](https://img.shields.io/badge/Engine-Local%20Dictionary-8b5a2b)](./结果/pingze-engine.js)
-[![DeepSeek](https://img.shields.io/badge/LLM-DeepSeek--V4.1--Flash-4d6bfe)](https://www.deepseek.com)
+[![DeepSeek](https://img.shields.io/badge/LLM-DeepSeek--Chat-4d6bfe)](https://www.deepseek.com)
 [![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3ecf8e)](https://supabase.com)
 [![Netlify](https://img.shields.io/badge/Deploy-Netlify-00c7b7)](https://www.netlify.com)
 [![License](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
@@ -102,10 +102,15 @@
 | Local backend | Node.js 20+ native `http` + `fetch` (`server.local.js`) |
 | Production backend | Netlify Serverless Functions (`netlify/functions/`) |
 | Database / Auth | Supabase (Postgres + Auth + RLS) |
-| LLM | DeepSeek-V4.1-Flash (API model ID `deepseek-flash`, AI insight only) |
+| LLM | DeepSeek-Chat (API model ID `deepseek-chat`, AI insight only) |
 
-> **On model IDs**: the DeepSeek API only accepts lowercase IDs (`deepseek-flash` / `deepseek-v4-pro`),
-> not display names. The code maps display names via `MODEL_ALIAS`, so `DEEPSEEK_MODEL` accepts either form.
+> **On model IDs**: the DeepSeek API only accepts lowercase IDs (`deepseek-chat` / `deepseek-flash` /
+> `deepseek-v4-pro`), not display names. The code maps display names via `MODEL_ALIAS`, so
+> `DEEPSEEK_MODEL` accepts either form. **The default is `deepseek-chat` (non-reasoning, ~2-4s)**:
+> `deepseek-flash` (V4.1-Flash) is a *reasoning* model that emits 2,000-4,000 reasoning tokens
+> before any answer, taking 14-26s per call — long past Netlify's function limit, where the
+> gateway kills it into a bare 504 (2026-10-16 production incident). **Never use it on
+> Serverless.**
 
 ---
 
@@ -174,7 +179,7 @@ Open <http://localhost:3000>; the admin console is at <http://localhost:3000/adm
 
 ```bash
 curl http://localhost:3000/api/health
-# {"ok":true,"model":"deepseek-flash","keyReady":true,"supabase":true,"note":"平仄/韵部查询为浏览器本地查表，不经过本服务；AI 赏析需登录并按次计配额"}
+# {"ok":true,"model":"deepseek-chat","keyReady":true,"supabase":true,"note":"平仄/韵部查询为浏览器本地查表，不经过本服务；AI 赏析需登录并按次计配额"}
 ```
 
 `keyReady` / `supabase` tell you at a glance whether `.env` took effect.
@@ -251,8 +256,10 @@ Set the following variables under the site's **Site settings → Environment var
 | `SUPABASE_SERVICE_KEY` | service_role key, **server-side only** | ✅ |
 | `SUPABASE_ANON_KEY` | anon public key, **injected into the frontend at build time** (not used by the functions) | ✅ |
 | `ADMIN_EMAILS` | Comma-separated allow-list for the admin console. If unset, **nobody can get in** (fail-closed) | ✅ |
-| `DEEPSEEK_MODEL` / `DEEPSEEK_BASE_URL` | Defaults: `DeepSeek-V4.1-Flash` / `https://api.deepseek.com` | optional |
-| `FUNCTION_TIMEOUT_MS` | Per-call AI timeout, default `9000` (fits Netlify's free-tier 10s cap; Pro allows up to `25000`) | optional |
+| `DEEPSEEK_MODEL` / `DEEPSEEK_BASE_URL` | Defaults: `deepseek-chat` / `https://api.deepseek.com` | optional |
+| `FUNCTION_TIMEOUT_MS` | **Whole-function budget** for AI insight (ms), default `8000`. Cold start, Supabase round-trips, the model call and serialization all count against it; effective value = `min(FUNCTION_TIMEOUT_MS, PLATFORM_LIMIT_MS - 500)` | optional |
+| `PLATFORM_LIMIT_MS` | The platform's hard cap for synchronous functions, default `10000` (Netlify free tier 10s; Pro goes to `26000` — raise `FUNCTION_TIMEOUT_MS` together) | optional |
+| `SUPABASE_TIMEOUT_MS` | Per-request Supabase timeout, default `5000` (keeps a hung Supabase call from eating the whole AI budget) | optional |
 | `REGISTER_MAX_PER_IP` / `REGISTER_MAX_PER_HOUR` | Sign-up rate limits | optional |
 | `NODE_VERSION` | `20` recommended | recommended |
 
@@ -263,6 +270,10 @@ Set the following variables under the site's **Site settings → Environment var
 > **Function timeout**: the free Netlify tier caps functions at 10 seconds. Since V5, tone queries never touch
 > the server (the browser answers in milliseconds), so a timeout can only affect a single AI generation —
 > and a failure there never invalidates the lookup result already on screen.
+> The AI endpoint's timeout is a **whole-function budget**: the handler passes a `deadline` (cold
+> invocations count container start-up too), and any stage that runs out of budget returns a
+> structured JSON error (`{"ok":false,"status":504,...}`) *before* the platform kills the process —
+> so users see a clear message instead of a bare 504 paired with "AI returned nothing".
 
 ### 🔎 Site verification (Baidu)
 
@@ -407,6 +418,11 @@ cannot write the counter columns directly.
   scope. Those analyses belong to the optional AI insight, as hints only.
 - **Characters missing from the rhyme table** (later or variant characters) appear as「？」placeholders that
   keep positions intact; duplicate detection does not unify simplified/traditional forms (云 ≠ 雲).
+- **AI insight defaults to a non-reasoning model** (`deepseek-chat`): reasoning models
+  (`deepseek-flash`) take 14-26s per call and are always killed into a 504 inside a Serverless
+  timeout. Switching to a reasoning model requires raising `FUNCTION_TIMEOUT_MS` and
+  `PLATFORM_LIMIT_MS` together (Pro's 26s budget) — and may still time out; a timed-out call
+  consumes one quota unit by design, preventing retry loops from burning money.
 - **This repository contains the application only**: operational scripts such as bulk data wipes and smoke
   tests were development by-products and are not included.
 

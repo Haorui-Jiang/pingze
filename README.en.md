@@ -56,6 +56,8 @@
 
 ### 3. Accounts and data
 
+- **Email verification required**: sign-up calls `client.auth.signUp()` and Supabase sends a verification
+  email; **the session is only issued after the address is verified**. Unverified accounts cannot sign in.
 - **Email + password sign-up / sign-in** backed by Supabase Auth, with automatic session refresh.
 - **Query records**: signed-in users can save each query ("☆ Save this query") and replay or delete it from
   the records panel; the panel collapses and the button label follows its state; RLS guarantees you can only
@@ -75,8 +77,6 @@
 - **Membership validity**: a member is valid only when `tier = member` **and** `member_expires_at > now()`.
   Expiry does not auto-downgrade — the tier simply goes inactive, leaving the operator to renew or downgrade
   deliberately, which keeps reconciliation simple.
-- **Sign-up rate limiting**: per-IP hourly cap plus a site-wide hourly cap; if counting fails, requests are
-  allowed rather than blocking legitimate sign-ups.
 
 ### 5. Engineering
 
@@ -131,12 +131,10 @@ pingze/
 │   └── 二维码.jpg             # Membership payment QR code
 ├── lib/                       # Server-side logic shared by the local backend and the Netlify functions
 │   ├── supabase-store.js      # Supabase REST access layer, JWT → user
-│   ├── auth.js                # Identity resolution, sign-up rate limiting
 │   ├── admin.js               # Admin auth + user listing + membership tier changes
 │   └── ai-insight.js          # AI insight: login check, atomic quota, DeepSeek call (new in V5)
 ├── netlify/functions/         # Production backend (behaviour-identical to the local one)
 │   ├── ai-insight.js          # POST /api/ai-insight (type: analysis | appreciation)
-│   ├── register.js            # POST /api/register
 │   ├── admin-users.js         # GET  /api/admin-users
 │   └── admin-set-tier.js      # POST /api/admin-set-tier
 ├── supabase/migrations/       # Database migrations (run in filename order)
@@ -150,7 +148,9 @@ pingze/
 ```
 
 > Since V5 the old `netlify/functions/analyze.js` (AI per-character tone judging) has been removed —
-> tone analysis is now pure frontend lookup, and the `/api/analyze` route is gone.
+> tone analysis is now pure frontend lookup, and the `/api/analyze` route is gone. `register.js`
+> (backend-provisioned accounts) was removed on 2026-10-16 when sign-up moved to Supabase `signUp` +
+> email verification — **registration no longer touches any backend**.
 
 ---
 
@@ -260,7 +260,6 @@ Set the following variables under the site's **Site settings → Environment var
 | `FUNCTION_TIMEOUT_MS` | **Whole-function budget** for AI insight (ms), default `8000`. Cold start, Supabase round-trips, the model call and serialization all count against it; effective value = `min(FUNCTION_TIMEOUT_MS, PLATFORM_LIMIT_MS - 500)` | optional |
 | `PLATFORM_LIMIT_MS` | The platform's hard cap for synchronous functions, default `10000` (Netlify free tier 10s; Pro goes to `26000` — raise `FUNCTION_TIMEOUT_MS` together) | optional |
 | `SUPABASE_TIMEOUT_MS` | Per-request Supabase timeout, default `5000` (keeps a hung Supabase call from eating the whole AI budget) | optional |
-| `REGISTER_MAX_PER_IP` / `REGISTER_MAX_PER_HOUR` | Sign-up rate limits | optional |
 | `NODE_VERSION` | `20` recommended | recommended |
 
 > `SUPABASE_ANON_KEY` must have the **builds** scope enabled, otherwise the build cannot read it.
@@ -405,14 +404,23 @@ cannot write the counter columns directly.
 
 ---
 
+## 📮 Registration and Email Verification
+
+Sign-up requires email verification: the frontend calls `client.auth.signUp()` and Supabase sends the
+verification email (the site is wired to Resend SMTP, `noreply@pingze.site`, sending domain verified).
+**A session is only issued once the address is verified**; unverified accounts are rejected at sign-in
+(`Email not confirmed`), so they cannot use AI insight either. Sign-up goes through no backend endpoint
+(the old `/api/register` is retired).
+
+Configuration prerequisites: under Supabase Dashboard → Authentication → Providers → Email, **Confirm email
+must be enabled**, and under URL Configuration the **Site URL must be `https://www.pingze.site`** (leaving it
+blank makes verification links bounce back to localhost). When changing these, remember: **configuring SMTP is
+not the same as enabling verification**.
+
+---
+
 ## ⚠️ Known Limitations
 
-- **Sign-up does not verify that an email address is real.** To sidestep Supabase's strict default SMTP
-  rate limits, sign-up goes through the server-side `/api/register`, which uses `service_role` to create an
-  already-confirmed account. Anyone can therefore register with a fake address; abuse is contained by
-  `REGISTER_MAX_PER_IP` / `REGISTER_MAX_PER_HOUR`. Once a custom SMTP provider is configured
-  (requiring a domain with SPF/DKIM/DMARC), email confirmation should be restored and sign-up reverted to
-  `client.auth.signUp`.
 - **The lookup engine deliberately does not** detect genre, validate metre (adherence / lonely ping /
   triple-ping endings / 拗救), check horse-step rhyme, or disambiguate by context — consistent with the method of the reference site
   (zhgc.com/pz/pz.asp). Those analyses belong to the optional AI insight, as hints only.

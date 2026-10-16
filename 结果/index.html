@@ -449,7 +449,8 @@ var _hmt = _hmt || [];
 </div>
 
 <!-- 依赖顺序：Supabase SDK → 前端配置 → 韵表数据 → 本地查表引擎 → 账号系统 → 内联逻辑 -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<!-- Supabase SDK 自托管（vendor/ 固定版本）：CSP script-src 只放行同源，外链 CDN 会被拦 -->
+<script src="/vendor/supabase-js-2.118.0.js"></script>
 <script src="supabase-config.js"></script>
 <script src="pingshui-yun-data.js"></script>
 <script src="pingze-engine.js"></script>

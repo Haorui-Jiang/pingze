@@ -70,6 +70,9 @@
 #  「禁止外部资源注入（base-uri/form-action/object-src）+ 禁止内联 eval」
 #  这些**零改造就能生效**的收益；后续把内联脚本外置后再逐步加严
 #  （去掉 'unsafe-inline'）。改 CSP 前务必本地与线上双验。
+#  ★ 2026-10-16 事故：script-src 曾漏放外部 CDN 域名，Supabase SDK 被浏览器拦截，
+#    首页降级成「账号功能未启用」。现 SDK 已自托管到 /vendor/（同源），CSP 无需放行 CDN；
+#    仅额外放行百度统计 hm.baidu.com（script/img/connect 三处）。改 CSP 后必须线上实测。
 # =====================================================================
 [[headers]]
   for = "/*"
@@ -78,7 +81,7 @@
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
     Permissions-Policy = "geolocation=(), microphone=(), camera=(), payment=(), usb=(), interest-cohort=()"
-    Content-Security-Policy = "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://*.supabase.co; font-src 'self' data:"
+    Content-Security-Policy = "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; script-src 'self' 'unsafe-inline' https://hm.baidu.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://hm.baidu.com; connect-src 'self' https://*.supabase.co https://hm.baidu.com; font-src 'self' data:"
 
 # 后台页额外禁止被搜索引擎收录（robots.txt 只是「请求遵守」，
 # 这里与 admin.html 里的 <meta name="robots"> 形成双保险）。

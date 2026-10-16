@@ -137,7 +137,8 @@
   </div>
 
   <!-- 依赖顺序：supabase UMD → supabase-config.js → admin.js -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <!-- SDK 自托管（vendor/ 固定版本）：CSP 只放行同源脚本 -->
+  <script src="/vendor/supabase-js-2.118.0.js"></script>
   <script src="/supabase-config.js"></script>
   <script src="/admin.js"></script>
 </body>

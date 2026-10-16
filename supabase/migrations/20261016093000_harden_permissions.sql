@@ -162,9 +162,38 @@ notify pgrst, 'reload schema';
 
 
 -- #####################################################################
+--  8) 已知残留：本迁移无法收口的 default ACL（请勿误以为已彻底解决）
+--
+--  `pg_default_acl` 实测有两组默认权限：
+--     role=postgres       → 本迁移第 4/5 节已收口（anon/authenticated 已移除）
+--     role=supabase_admin → **收不了**。实测执行
+--         alter default privileges for role supabase_admin in schema public
+--           revoke all on tables from anon, authenticated;
+--     返回 `42501 permission denied to change default privileges`
+--     ——该角色由 Supabase 平台持有，改它的默认权限需要 superuser，
+--     exec_sql（security definer，owner 为 postgres）做不到。
+--
+--  实际影响评估：
+--     · 本项目所有表都是通过 exec_sql（postgres 身份）建的，
+--       走的是 postgres 那组默认权限 → **已被本迁移收口**。
+--     · supabase_admin 那组只在「用别的身份建表」时生效，例如
+--       在 Dashboard 的 SQL Editor 里直接 CREATE TABLE。
+--       若那样建表，新表仍会自带 anon/authenticated 全套权限。
+--
+--  ⇒ 因此新增一条硬要求：
+--     **今后任何新表，不管用什么身份创建，都必须在同一份迁移里显式写全 revoke，**
+--     并把它加进 tools/selfcheck.js 的巡检项。别依赖默认权限已经安全。
+--
+--  （若将来在 Dashboard 手工建表后忘记收权，最直接的症状就是
+--    anon key 能读/写那张新表 —— 用 anon key 打 /rest/v1/<新表> 即可自查。）
+-- #####################################################################
+
+
+-- #####################################################################
 --  自检（应用后跑这几条，全部应返回期望值）
 --
---  期望 has_function_privilege 全 = false：
+--  期望 has_function_privilege 全 = false（这是权威判断，不要用 proacl 字符串匹配，
+--  因为 "postgres=X/postgres" 里含有 "=X" 子串，会误判成还有 PUBLIC）：
 --    select has_function_privilege('anon',        'public.ai_quota_consume(uuid)', 'execute');  -- false
 --    select has_function_privilege('authenticated','public.ai_quota_consume(uuid)', 'execute');  -- false
 --    select has_function_privilege('anon',        'public.exec_sql(text)',         'execute');  -- false
@@ -182,8 +211,4 @@ notify pgrst, 'reload schema';
 --    select has_table_privilege('authenticated', 'public.queries', 'SELECT');                    -- true
 --    select has_table_privilege('authenticated', 'public.queries', 'INSERT');                    -- true
 --    select has_table_privilege('authenticated', 'public.profiles', 'SELECT');                   -- true
---
---  proacl 里不应再出现 "=X"：
---    select proname, proacl::text from pg_proc
---     join pg_namespace n on n.oid = pronamespace where n.nspname = 'public';
 -- #####################################################################

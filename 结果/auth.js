@@ -861,12 +861,29 @@
         return;
       }
 
-      // 带 access_token 回来 = 验证成功，SDK 已自动建立会话（detectSessionInUrl）
+      // 带 access_token 回来 = 验证成功。SDK 已在 detectSessionInUrl 下自动
+      // 建立会话，页面会变成已登录界面——这里**不要**再弹任何提示：
+      // 用户点链接回来的预期就是「直接进去用」，弹个登录框反而像出错。
+      //
+      // 兜底 refresh：SDK 处理 URL 里的 token 是异步的，而本文件的
+      // refresh() 在 onAuthStateChange 注册**之前**就调用过一次。极端时序下
+      // 那次读到的还是空会话。这里再主动读一次，确保一定切成登录态。
       if (params.access_token) {
-        openLogin('邮箱验证成功，已为你自动登录。');
-        try {
-          history.replaceState(null, '', window.location.pathname);
-        } catch (e) {}
+        // 先让 SDK 把 URL 里的 token 收进 session（不要抢在它前面清 URL），
+        // 再刷界面。等会话确实落到 storage 后才清地址栏。
+        var waitForSession = function (tries) {
+          refresh().then(function () {
+            if (currentUser || tries <= 0) {
+              // 会话已就绪（或已尽力），清掉地址栏里的 token
+              try {
+                history.replaceState(null, '', window.location.pathname);
+              } catch (e) {}
+              return;
+            }
+            setTimeout(function () { waitForSession(tries - 1); }, 150);
+          });
+        };
+        waitForSession(6);   // 最多等约 1s
       }
     })();
   }

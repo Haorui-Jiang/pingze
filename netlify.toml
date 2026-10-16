@@ -30,7 +30,7 @@
 # 实际调用路径：/.netlify/functions/<函数名>
 # V5 起 /api/analyze 已不存在；AI 赏析走 /api/ai-insight。
 # 注册也**不走这里**（2026-10-16）：前端直接用 Supabase SDK 的 signUp，
-# 由 Supabase 发验证邮件；原先的 /api/register（service_role 免验证建号）已下线。
+# 由 Supabase 发验证邮件；原先由后端代建号的 /api/register 已下线。
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"

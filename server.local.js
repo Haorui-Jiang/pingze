@@ -215,8 +215,8 @@ const server = http.createServer((req, res) => {
   // ---------- 注册：已退役（2026-10-16）----------
   // 注册改由前端直接调 Supabase 的 signUp（客户端 SDK 用 anon key 即可），
   // 由 Supabase 发验证邮件、验证通过后才拿得到 session。
-  // 原先这里的 /api/register 用 service_role 直接建号并写 email_confirm=true，
-  // 等于**跳过邮箱验证**，且该免验证入口在公网可被批量调用刷号薅 AI 额度，故移除。
+  // 原先这里的 /api/register 由后端代建号、不发验证邮件，且该入口在公网
+  // 可被批量调用刷号薅 AI 额度，现已改由前端 signUp + 邮箱验证，故移除。
   if (req.url === '/api/register') {
     res.writeHead(410, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({ error: '注册接口已下线，请在前端完成注册。' }));

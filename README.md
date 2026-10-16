@@ -43,7 +43,10 @@
 
 - **邮箱密码注册 / 登录**：基于 Supabase Auth，会话自动刷新。
 - **查询记录**：登录用户可保存每次查询（「☆ 保存本次查询」），在记录面板中回放与删除；面板可折叠，按钮文案随开关状态切换；RLS 保证只能读 / 建 / 删自己的记录。
+- **AI 赏析结果一并入库**：生成 AI 平仄分析 / 诗词鉴赏后，内容自动写入 `query_insights` 表（append-only，RLS 与 `queries` 同口径）。若这次查询此前从未保存过，会先静默补一条 `queries` 记录作为挂载点，因此「从没点过保存也能在记录里看到 AI 内容」。同一条记录的同一类型重复生成会追加多条，展示时取最新一条。
+- **记录里直接看 AI**：记录卡片右上角标「含 AI 赏析」，正文下方以折叠块展示 AI 内容；点击记录正文回放时，查表结果与 AI 文本一并载入结果区（开关不代勾，用户可自行重新生成）。删除查询记录时 AI 内容随外键级联删除，不留孤儿。
 - **保存即见**：点保存后面板自动打开并刷新；原本已打开则只刷新不滚动；未登录时三处提示「登录后可保存」。
+- **查询后自动定位**：点「查询」后结果窗口平滑滚入视口（失败时滚到错误提示），长文本下不必手动往下找。
 
 ### 四、会员与运营
 
@@ -171,6 +174,7 @@ curl http://localhost:3000/api/health
 | `0006_membership.sql` | 会员体系：`tier` / `member_since` / `member_expires_at` + 有效会员判定 + 防提权触发器 |
 | `0007_v5_query_engine.sql` | **V5 主迁移**：删除 poems / analyses / analysis_cache / api_usage / feedback 五张表；新建 `queries` 查询记录表（RLS 本人可读/建/删，anon 全 revoke）；profiles 增加 `ai_used_date` / `ai_used_count` 轻量计数列；创建 `ai_usage_today()` / `ai_quota_consume(uuid)` 两个 RPC |
 | `20261016000347_set_timezone_cst.sql` | 数据库默认时区改为 `Asia/Shanghai`（时间戳渲染东八区，存储不变） |
+| `20261016094246_add_query_insights.sql` | 新建 `query_insights` 表存 AI 赏析内容（外键 `query_id → queries` 级联删除，RLS 与 `queries` 同口径：本人可读 / 建 / 删、无 UPDATE，append-only）；`kind` 用 check 锁死 `analysis` / `appreciation` |
 
 3. 建表后如 REST 接口看不到新表，执行一次 `NOTIFY pgrst, 'reload schema';` 刷新 PostgREST 的 schema 缓存。
 

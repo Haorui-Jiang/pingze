@@ -261,6 +261,14 @@
     if (/Password should be at least/i.test(msg)) return '密码太短了，至少 6 位';
     if (/Unable to validate email/i.test(msg)) return '邮箱格式不对';
     // 邮件发送类错误（换 Resend SMTP 后可能遇到）
+    if (/Error sending confirmation email/i.test(msg)) {
+      // Supabase 只回一句笼统的 "Error sending confirmation email"，真实原因在
+      // Dashboard → Authentication → Logs。绝大多数是 Resend 账号还在「测试模式」：
+      // 未验证发信域名时Resend 只允许发到账号自己的邮箱，给别的地址一律 550拒收。
+      // 这不是用户能自己解决的，所以明确指向运营人，避免反复重试。
+      return '验证邮件暂时发不出去：邮件服务的发信域名还在验证中，' +
+        '目前只能发到运营人自己的邮箱。请稍后再试，或联系运营人。';
+    }
     if (/Email rate limit exceeded|over_email_send_rate_limit/i.test(msg)) {
       return '验证邮件发送太频繁，请等一分钟后再试';
     }

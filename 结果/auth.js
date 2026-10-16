@@ -820,8 +820,54 @@
   }
 
   if (client) {
-    client.auth.onAuthStateChange(function () {
+    client.auth.onAuthStateChange(function (event, session) {
       refresh();
     });
+
+    // -------- 验证邮件链接的落地处理 --------
+    // 用户点邮件里的链接后会带着 #access_token=...（已验证）或
+    // #error=access_denied&error_code=otp_expired&...（链接失效）回到本站。
+    // 上面 onAuthStateChange 只管「有 session」，错误分支它完全不触发，
+    // 于是用户只看到地址栏里的乱码参数、页面毫无反应——必须显式识别。
+    (function handleVerifyCallback() {
+      var hash = String(window.location.hash || '');
+      if (hash.indexOf('#') !== 0) hash = '';
+      var params = {};
+      if (hash) {
+        hash.slice(1).split('&').forEach(function (kv) {
+          var p = kv.split('=');
+          if (p[0]) params[decodeURIComponent(p[0])] = decodeURIComponent(p[1] || '');
+        });
+      }
+      ['error', 'error_code', 'error_description'].forEach(function (k) {
+        var q = new URLSearchParams(window.location.search).get(k);
+        if (q && !params[k]) params[k] = q;
+      });
+
+      if (params.error || params.error_code) {
+        var msg;
+        if (/otp_expired|expired|invalid/i.test(params.error_code + ' ' + params.error_description)) {
+          msg = '这个验证链接已失效或已被使用。请回到登录框重新登录，' +
+            '登录时若提示邮箱未验证，点「没收到验证邮件？重新发送」即可。';
+        } else {
+          msg = '邮箱验证没有完成（' + (params.error_description || params.error_code || params.error) +
+            '）。请重新登录并重发验证邮件。';
+        }
+        openLogin(msg);
+        // 清掉地址栏里的 token/错误参数，避免刷新时重复报错
+        try {
+          history.replaceState(null, '', window.location.pathname + window.location.search);
+        } catch (e) {}
+        return;
+      }
+
+      // 带 access_token 回来 = 验证成功，SDK 已自动建立会话（detectSessionInUrl）
+      if (params.access_token) {
+        openLogin('邮箱验证成功，已为你自动登录。');
+        try {
+          history.replaceState(null, '', window.location.pathname);
+        } catch (e) {}
+      }
+    })();
   }
 })();

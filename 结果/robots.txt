@@ -1,0 +1,16 @@
+User-agent: *
+Allow: /
+
+# 后台：含用户数据与会员操作，不应被收录。
+# 注意 robots.txt 只是「请求遵守」，硬拒绝由 admin.html 的 <meta name="robots" content="noindex,nofollow"> 提供。
+Disallow: /admin
+Disallow: /admin.html
+
+# 接口与 Serverless 函数：不是给人看的页面，抓了只会产生 4xx/JSON 噪声
+Disallow: /api/
+Disallow: /.netlify/functions/
+
+# 含 Supabase 配置的前端脚本，无收录价值
+Disallow: /supabase-config.js
+
+Sitemap: https://www.pingze.site/sitemap.xml

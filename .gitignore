@@ -1,0 +1,35 @@
+# ---------- 依赖 ----------
+node_modules/
+
+# ---------- 密钥 / 环境变量（绝不入库）----------
+.env
+.env.local
+.env.*.local
+
+# 前端 Supabase 配置：含真实的 Project URL 与 anon key。
+# anon key 本身设计上就是公开的，但 URL 不该暴露，且便于本地/线上切换。
+# 仓库内只保留 supabase-config.example.js 模板。
+结果/supabase-config.js
+**/supabase-config.js
+
+# ---------- 日志与运行时产物 ----------
+*.log
+npm-debug.log*
+pids/
+*.pid
+*.seed
+
+# ---------- 编辑器 / 系统 ----------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# ---------- 构建 / 部署暂存 ----------
+dist/
+.netlify/
+
+# ---------- Python（若在本仓库内跑脚本）----------
+__pycache__/
+*.py[cod]

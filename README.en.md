@@ -414,8 +414,8 @@ cannot write the counter columns directly.
   (requiring a domain with SPF/DKIM/DMARC), email confirmation should be restored and sign-up reverted to
   `client.auth.signUp`.
 - **The lookup engine deliberately does not** detect genre, validate metre (adherence / lonely ping /
-  triple-ping endings / 拗救), check horse-step rhyme, or disambiguate by context — consistent with the V4.2
-  scope. Those analyses belong to the optional AI insight, as hints only.
+  triple-ping endings / 拗救), check horse-step rhyme, or disambiguate by context — consistent with the method of the reference site
+  (zhgc.com/pz/pz.asp). Those analyses belong to the optional AI insight, as hints only.
 - **Characters missing from the rhyme table** (later or variant characters) appear as「？」placeholders that
   keep positions intact; duplicate detection does not unify simplified/traditional forms (云 ≠ 雲).
 - **AI insight defaults to a non-reasoning model** (`deepseek-chat`): reasoning models

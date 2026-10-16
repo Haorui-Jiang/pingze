@@ -360,7 +360,7 @@ AI 配额的扣减只走 security definer 的 `ai_quota_consume(uuid)` RPC，前
   `/api/register` 用 `service_role` 直接建「已确认」账号，因此任何人可用假邮箱注册，
   靠 `REGISTER_MAX_PER_IP` / `REGISTER_MAX_PER_HOUR` 防刷。
   接入自定义 SMTP（需自有域名配 SPF/DKIM/DMARC）后，应恢复邮箱确认并把注册改回 `client.auth.signUp`。
-- **查表引擎刻意不做**文体判定、格律校验、马蹄韵与上下文消歧——与 V4.2 口径一致；
+- **查表引擎刻意不做**文体判定、格律校验、马蹄韵与上下文消歧——与参考网站（zhgc.com/pz/pz.asp）方法一致；
   这些分析交给可选的 AI 赏析，且仅作提示。
 - **韵表未收录的字**（后起字 / 异体字）以「？」占位，位置不塌；重字不做繁简归一（云 ≠ 雲）。
 - **AI 赏析默认用非推理模型**（`deepseek-chat`）：推理型模型（`deepseek-flash`）单次要 14-26s，

@@ -189,6 +189,9 @@ const server = http.createServer((req, res) => {
   // 查表不经过这里；只有前端勾选了某个 AI 开关才会请求本接口。
   if (req.method === 'POST' && req.url === '/api/ai-insight') {
     readJsonBody(req, res, async (parsed) => {
+      // 全函数总预算：本地无平台硬限时，但同一套 deadline 口径保证
+      // 「模型再慢也会在预算内返回结构化错误」而不是挂死请求
+      const deadline = Date.now() + insight.FUNCTION_TIMEOUT_MS;
       try {
         const token = store.extractBearer(req.headers.authorization);
         const user = await store.getUserFromToken(token);
@@ -197,6 +200,7 @@ const server = http.createServer((req, res) => {
           text: parsed.text,
           table: parsed.table,
           user: user,
+          deadline: deadline,
         });
         res.writeHead(out.status || (out.ok ? 200 : 500), { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify(out));

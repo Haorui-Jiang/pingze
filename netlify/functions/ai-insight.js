@@ -13,7 +13,17 @@
 const store = require('../../lib/supabase-store');
 const insight = require('../../lib/ai-insight');
 
+// 冷调用时把容器启动时间也计入超时预算（模块加载 ≈ 函数冷启动的开始），
+// 避免「budget 从 handler 入口才算、bootstrap 时间不计」导致总时长越过
+// 平台硬限时被网关杀成 504 空响应。详见 lib/ai-insight.js 超时预算注释。
+const MODULE_LOADED_AT = Date.now();
+let coldInvocation = true;
+
 exports.handler = async (event) => {
+  const startedAt = coldInvocation ? MODULE_LOADED_AT : Date.now();
+  coldInvocation = false;
+  const deadline = startedAt + insight.FUNCTION_TIMEOUT_MS;
+
   const headers = {
     'Content-Type': 'application/json; charset=utf-8',
     'Access-Control-Allow-Origin': '*',
@@ -49,6 +59,7 @@ exports.handler = async (event) => {
     text: parsed.text,
     table: parsed.table,
     user: user,
+    deadline: deadline,
   });
 
   return { statusCode: out.status || (out.ok ? 200 : 500), headers, body: JSON.stringify(out) };

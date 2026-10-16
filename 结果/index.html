@@ -622,7 +622,11 @@ async function generateAi(type) {
       return;
     }
     if (!data.content) {
-      out.textContent = 'AI 没有返回内容，请重试。';
+      // 5xx 且响应体不是 JSON（典型：平台网关超时杀进程返回的 504 空响应）：
+      // 明确告知是超时/繁忙，别让用户误以为「AI 没干活」；查表结果不受影响
+      out.textContent = r.status >= 500
+        ? 'AI 服务超时或繁忙，请稍后重试（平仄查询结果不受影响）。'
+        : 'AI 没有返回内容，请重试。';
       return;
     }
     out.textContent = data.content +

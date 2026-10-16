@@ -1,6 +1,7 @@
-# 平仄格律查询站 · DeepSeek
+# 平仄格律查询站
 
 [![Node](https://img.shields.io/badge/Node-20%2B-339933)](https://nodejs.org)
+[![Engine](https://img.shields.io/badge/Engine-Local%20Dictionary-8b5a2b)](./结果/pingze-engine.js)
 [![DeepSeek](https://img.shields.io/badge/LLM-DeepSeek--V4.1--Flash-4d6bfe)](https://www.deepseek.com)
 [![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3ecf8e)](https://supabase.com)
 [![Netlify](https://img.shields.io/badge/Deploy-Netlify-00c7b7)](https://www.netlify.com)
@@ -8,8 +9,9 @@
 
 [中文](./README.md)　　[English](./README.en.md)
 
-> 输入一首诗词，逐字标注平仄、判定文体、溯源《平水韵》韵部。
-> 用 **DeepSeek 大模型实时推断**替代传统逐字字典查表，能处理字典收不到的多音字与变格。
+> 输入一首诗词，**逐字标注平仄**、给出每句尾字的《平水韵》韵部。
+> 平仄判定走**浏览器本地字典查表**（平水韵 106 韵、七千余字），毫秒级返回、断网可用、不调用大模型；
+> AI（DeepSeek）只做**可选的**「平仄分析 / 诗词鉴赏」，双开关默认关闭，登录后按次计配额。
 > 参考网站：`http://www.zhgc.com/pz/pz.asp`
 
 **在线体验**：<https://www.pingze.site/>
@@ -18,44 +20,46 @@
 
 ## ✨ 功能特性
 
-### 一、格律分析（核心）
+### 一、平仄查询（核心，纯本地）
 
-- **逐字平仄标注**：平（绿）/ 仄（红）/ 通（灰）/ ？（未定）/ —（标点等非汉字），逐字符对齐原诗。
-- **文体自动判定**：依据句数、每句字数、对仗与押韵，给出五言律诗 / 七言绝句 / 词牌等。
-- **《平水韵》韵部溯源**：按平水韵给出韵部，如「上平一东」「下平七阳」，多韵并列。
-- **格律点评**：每个结果附一句简短的格律说明。
-- **一键复制**：完整结果整段复制到剪贴板。
-- **进度可见**：分析等待期间前端轮播提示，不白屏。
-- **输入清洗**：提交前自动去除换行、半角/全角空格与制表符。
-- **字数实时提示**：超过 40 字转红色警示，提示分批提交（避免长文本超时）。
-- **健壮性防护**：后端返回不完整或非 JSON 时降级为明确报错，不再出现「文体 —／总字数 0」的假成功。
+- **逐字平仄标注**：平 / 仄 / 通（多音字平仄两读）/ ？（未定）/ 未收录（全角空格占位），逐字符与原诗对齐，位置不塌。
+- **句尾韵部**：每个分句行尾标注「◆ 尾字【韵部】」，按「上平 → 下平 → 上声 → 去声 → 入声」排序；末字无韵目时自动回退一位取前字；多音字全列韵部。
+- **统计摘要**：总字数、平声数、仄声数实时计算。
+- **古平仄推导**：由「字 → 韵部」反查表推导——只入平声韵为平，只入上/去/入声韵为仄，平仄韵都入为通。
+- **输入规范**：上限 1000 字；自动清除半角/全角空格与制表符；按标点符号表分句（连续标点合并、首尾标点不产空句）；未收录字不跳过、原位占位。
+- **一键复制**：完整结果（原文 + 平仄串 + 尾字韵部 + 统计）整段复制到剪贴板。
+- **零服务端成本**：判定全在浏览器完成，不请求后端、不耗配额、断网可用；查询**永久免费、无需登录**。
 
-### 二、账号与数据
+### 二、AI 赏析（可选，双开关）
+
+- **两个独立开关**：「AI 平仄分析」与「诗词鉴赏」，**默认全关**；勾选后才出现生成按钮，未勾选时零请求（浏览器网络面板可验证）。
+- **AI 平仄分析**：以本地查表结果（平仄串、尾字韵部）为确定输入，判粘对、孤平、三平尾、拗救、对仗、押韵归类——提示词明确要求「以传入查表结果为准，不得自行改判」。
+- **诗词鉴赏**：意境、章法、修辞、典故。
+- **服务端防绕过**：开关与配额都在服务端二次校验，不信前端；先原子扣减配额再调模型，配额故障时降级放行。
+- **失败隔离**：AI 失败只影响当次赏析，上方查表结果不受任何影响。
+- **按次计配额**：免费 3 次/天、会员 10 次/天，按北京时间自然日重置（`ai_usage_today()` / `ai_quota_consume()` 两个 RPC，后者 security definer 原子扣减）。
+
+### 三、账号与数据
 
 - **邮箱密码注册 / 登录**：基于 Supabase Auth，会话自动刷新。
-- **必须登录才能分析**：服务端在**查缓存之前**拦截匿名请求（返回 `401 needLogin`），防止匿名白嫖已缓存结果。
-- **我的分析**：个人分析历史流水，面板常驻、新分析完成即时刷新。
-- **我的作品**：保存 / 编辑 / 删除自己的诗词作品；点击作品正文可回填到输入框重新分析。
-- **☆ 保存为作品**：分析完成后一键入库，带防重复与加载态，成功提示常驻。
-- **结果缓存**：以 `(输入文本 + 模型 + 引擎版本)` 哈希去重；**命中缓存不消耗配额、零等待**。
+- **查询记录**：登录用户可保存每次查询（「☆ 保存本次查询」），在记录面板中回放与删除；面板可折叠，按钮文案随开关状态切换；RLS 保证只能读 / 建 / 删自己的记录。
+- **保存即见**：点保存后面板自动打开并刷新；原本已打开则只刷新不滚动；未登录时三处提示「登录后可保存」。
 
-### 三、会员与运营
+### 四、会员与运营
 
-- **每日配额**：免费用户 1 次/日，会员 10 次/日（按北京时间自然日重置）。
-- **付费引导**：免费额度用尽时弹出二维码引导开通会员（¥1 / 天，按月计费，30 天 ¥30）。
-  - 配额判定**以服务端 `usage_today()` 为准**，刷新页面无法绕过。
-- **管理后台 `/admin`**：邮箱白名单鉴权（服务端校验，前端仅作体验层），可浏览用户列表、
-  分析次数、调用次数、注册时间、最近登录，以及查看/修改会员等级与到期倒计时。
-- **会员有效期**：`tier=member` 且 `member_expires_at > now()` 才算有效；到期不自动降级，
-  仅失活，由运营人决定续费或降级，便于对账。
+- **每日配额**：免费 3 次/天、会员 10 次/天（AI 赏析专用；查表不计数）。
+- **付费引导**：AI 额度用尽时弹出二维码引导开通会员（30 天 ¥30）；配额判定以服务端 RPC 为准，刷新页面无法绕过。
+- **管理后台 `/admin`**：邮箱白名单鉴权（`ADMIN_EMAILS`，服务端用 service_role 重新校验 JWT，前端仅作体验层），可浏览用户列表、查询记录数、今日 AI 用量、注册/最近登录时间（东八区），以及开通 / 降级会员与到期倒计时。
+- **会员有效期**：`tier=member` 且 `member_expires_at > now()` 才算有效；到期不自动降级，仅失活，由运营人决定续费或降级，便于对账。
 - **注册风控**：单 IP 每小时上限 + 全站每小时上限；计数异常时宁放行不误挡。
 
-### 四、工程特性
+### 五、工程特性
 
 - **零依赖、零构建**：前端原生 HTML / CSS / JS，后端只用 Node 内置模块，无 `node_modules`。
 - **本地与线上同一份逻辑**：`lib/` 下的共享库同时被本地后端与 Netlify 函数引用，避免两份实现漂移。
-- **严格数据隔离**：数据库启用 RLS + 列级权限 + 守卫触发器；缓存表对客户端完全不可见。
-  - 用户无法把自己改成 `member` 或提升配额——`revoke` 列权限与 BEFORE UPDATE 触发器双重拦截。
+- **严格数据隔离**：数据库启用 RLS + 列级权限；用户无法把自己改成 `member` 或篡改配额计数。
+- **东八区时间口径**：数据库默认时区为 `Asia/Shanghai`，所有时间戳（注册时间、到期时间等）渲染为东八区；存储仍是 UTC 绝对时间。
+- **SEO 就绪**：两个公开页（`/` 与 `/pingshui-yun`）配置了 title / description / keywords / OG 与百度统计；`tools/gen-sitemap.js` 自动生成 sitemap。
 
 ---
 
@@ -64,10 +68,11 @@
 | 层 | 技术 |
 |---|---|
 | 前端 | 原生 HTML / CSS / JS（零依赖；宣纸底 + 楷体 + 印泥红古风） |
+| 查表引擎 | `结果/pingze-engine.js`（UMD，Node 可 require，42 条断言回归） |
 | 本地后端 | Node.js 20+ 原生 `http` + `fetch`（`server.local.js`） |
 | 线上后端 | Netlify Serverless Functions（`netlify/functions/`） |
 | 数据库 / 认证 | Supabase（Postgres + Auth + RLS） |
-| 大模型 | DeepSeek-V4.1-Flash（接口 ID `deepseek-flash`） |
+| 大模型 | DeepSeek-V4.1-Flash（接口 ID `deepseek-flash`，仅 AI 赏析用） |
 
 > **模型 ID 说明**：DeepSeek 接口只接受小写 ID（`deepseek-flash` / `deepseek-v4-pro`），
 > 不接受展示名。代码里用 `MODEL_ALIAS` 做映射，`DEEPSEEK_MODEL` 填展示名或 ID 均可。
@@ -79,24 +84,27 @@
 ```
 pingze/
 ├── 结果/                      # 静态站点发布目录（netlify.toml 里 publish = "结果"）
-│   ├── index.html             # 首页：分析界面 + 登录/注册弹层 + 历史/作品面板 + 付费二维码弹层
+│   ├── index.html             # 首页：查表界面 + 登录/注册弹层 + 查询记录面板 + AI 双开关 + 付费二维码弹层
 │   │                          #   　<head> 内含百度站点验证 meta（见「站点验证」小节）
-│   ├── admin.html             # 管理后台页面（/admin）
-│   ├── auth.js                # 前端认证与数据层：登录、历史、作品、配额、升级引导
-│   ├── admin.js               # 后台逻辑：管理员登录校验 + 用户表渲染 + 改等级
+│   ├── pingshui-yun.html      # 平水韵 106 韵韵部对照表（SEO 承载页）
+│   ├── pingshui-yun-data.js   # 韵表数据（window.PINGSHUI_YUN）
+│   ├── pingze-engine.js       # 本地查表引擎：平仄 / 尾字韵部 / 重字（V5 核心，UMD）
+│   ├── auth.js                # 前端认证与数据层：登录、查询记录、配额
+│   ├── admin.html  admin.js   # 管理后台（邮箱白名单鉴权）
 │   ├── supabase-config.example.js  # 前端配置模板（复制为 supabase-config.js 后填真实值）
 │   ├── baidu_verify_codeva-W1T8O1gd3p.html  # 百度站长平台站点归属验证文件，**文件名与内容不可改动**
 │   └── 二维码.jpg             # 会员付费引导二维码
 ├── lib/                       # 本地后端与 Serverless 函数共用的服务端逻辑
-│   ├── supabase-store.js      # 缓存 / 配额 / 流水 / 身份校验
-│   ├── auth.js                # 注册（绕开 SMTP 限流）+ 风控限流
-│   └── admin.js               # 管理员鉴权 + 用户列表 + 改会员等级
+│   ├── supabase-store.js      # Supabase REST 访问层、JWT 换用户
+│   ├── auth.js                # 用户身份识别、注册限流
+│   ├── admin.js               # 管理员鉴权 + 用户列表 + 改会员等级
+│   └── ai-insight.js          # AI 赏析：登录校验、原子配额、DeepSeek 调用（V5 新增）
 ├── netlify/functions/         # 线上后端（与本地后端行为一致）
-│   ├── analyze.js             # POST /api/analyze
+│   ├── ai-insight.js          # POST /api/ai-insight（type: analysis | appreciation）
 │   ├── register.js            # POST /api/register
 │   ├── admin-users.js         # GET  /api/admin-users
 │   └── admin-set-tier.js      # POST /api/admin-set-tier
-├── supabase/migrations/       # 数据库迁移脚本（按序号顺序执行）
+├── supabase/migrations/       # 数据库迁移脚本（按文件名顺序执行）
 ├── scripts/
 │   └── gen-supabase-config.js # 构建期生成 结果/supabase-config.js（从环境变量取值，见「部署到 Netlify」）
 ├── netlify.toml               # 发布目录、函数目录、构建命令、函数超时、路由重写
@@ -106,6 +114,8 @@ pingze/
 └── LICENSE
 ```
 
+> V5 起已删除旧的 `netlify/functions/analyze.js`（AI 逐字判平仄）——平仄判定改为纯前端查表，`/api/analyze` 路由随之废弃。
+
 ---
 
 ## 🚀 本地运行
@@ -114,7 +124,7 @@ pingze/
 
 ```bash
 # 1. 准备服务端环境变量
-cp .env.example .env      # 至少填 DEEPSEEK_API_KEY
+cp .env.example .env      # 至少填 DEEPSEEK_API_KEY（只影响 AI 赏析；查表不需要它）
 
 # 2. 准备前端配置（浏览器读不到 .env，需单独一份）
 cp 结果/supabase-config.example.js 结果/supabase-config.js
@@ -132,7 +142,7 @@ npm run dev               # 等价于 node --watch server.local.js（改代码�
 
 ```bash
 curl http://localhost:3000/api/health
-# {"ok":true,"model":"deepseek-flash","keyReady":true,"supabase":true,"engineVersion":"..."}
+# {"ok":true,"model":"deepseek-flash","keyReady":true,"supabase":true,"note":"平仄/韵部查询为浏览器本地查表，不经过本服务；AI 赏析需登录并按次计配额"}
 ```
 
 `keyReady` / `supabase` 可快速判断 `.env` 是否生效。端口被占用时用 `PORT=3001 npm start`。
@@ -145,22 +155,23 @@ curl http://localhost:3000/api/health
 ## 🗄 数据库初始化
 
 1. 在 Supabase 建好项目，取 **Project URL**、**anon public key**（给前端）、**service_role key**（只给服务端）。
-2. 打开 **SQL Editor**，按序号顺序逐个粘贴执行 `supabase/migrations/` 下的脚本：
+2. 打开 **SQL Editor**（或本项目工作区的 `python db/sb.py sqlfile <脚本>`），按文件名顺序逐个执行 `supabase/migrations/` 下的脚本：
 
 | 脚本 | 作用 |
 |---|---|
 | `0000_bootstrap_exec_sql.sql` | 创建 `service_role` 专属的 `exec_sql` RPC（后续迁移与后台 SQL 都靠它）。**必须最先执行** |
-| `0001_p0_strict.sql` | P0 六张核心表 + RLS 严格隔离（profiles / poems / analyses / analysis_cache / api_usage / feedback） |
-| `0002_fix_column_privileges.sql` | 修正列级权限（先收整表再按列放行），彻底挡住用户自我提权 |
+| `0001_p0_strict.sql` | 初版核心表 + RLS 严格隔离（profiles / poems / analyses / analysis_cache / api_usage / feedback；后五张已由 `0007` 删除） |
+| `0002_fix_column_privileges.sql` | 修正列级权限（先收整表再按列放行），挡住用户自我提权 |
 | `0003_fix_quota_counting.sql` | 配额口径修正：只统计 `ok` / `timeout`，缓存命中与超限重试不计费 |
 | `0004_set_daily_quota_10.sql` | 默认每日配额调整为 10 |
 | `0005_simplify_profiles.sql` | 精简 `profiles` 为 `(id, email, created_at)` |
 | `0006_membership.sql` | 会员体系：`tier` / `member_since` / `member_expires_at` + 有效会员判定 + 防提权触发器 |
+| `0007_v5_query_engine.sql` | **V5 主迁移**：删除 poems / analyses / analysis_cache / api_usage / feedback 五张表；新建 `queries` 查询记录表（RLS 本人可读/建/删，anon 全 revoke）；profiles 增加 `ai_used_date` / `ai_used_count` 轻量计数列；创建 `ai_usage_today()` / `ai_quota_consume(uuid)` 两个 RPC |
+| `20261016000347_set_timezone_cst.sql` | 数据库默认时区改为 `Asia/Shanghai`（时间戳渲染东八区，存储不变） |
 
 3. 建表后如 REST 接口看不到新表，执行一次 `NOTIFY pgrst, 'reload schema';` 刷新 PostgREST 的 schema 缓存。
 
-> **顺序不能乱**：`0000` 依赖 `service_role`；`0002` 必须在 `0001` 之后（先有表才能改权限）；
-> `0006` 重写了 `usage_today()`，必须在 `0004` 之后。
+> **顺序不能乱**：`0000` 依赖 `service_role`；`0002` 必须在 `0001` 之后；`0006` 必须在 `0004` 之后；`0007` 依赖前面各表已存在（它负责删除）。
 
 ---
 
@@ -194,15 +205,13 @@ command = "node scripts/gen-supabase-config.js"
 
 | 变量 | 说明 | 必填 |
 |---|---|---|
-| `DEEPSEEK_API_KEY` | DeepSeek API Key | ✅ |
+| `DEEPSEEK_API_KEY` | DeepSeek API Key（仅 AI 赏析使用；查表不依赖它） | ✅ |
 | `SUPABASE_URL` | 项目根地址，**不要带 `/rest/v1`** | ✅ |
 | `SUPABASE_SERVICE_KEY` | service_role key，**只放服务端** | ✅ |
 | `SUPABASE_ANON_KEY` | anon public key，**构建时注入前端**（不是函数运行时用的） | ✅ |
 | `ADMIN_EMAILS` | 管理后台邮箱白名单，逗号分隔。未配置时**任何人都进不去**（fail-closed） | ✅ |
 | `DEEPSEEK_MODEL` / `DEEPSEEK_BASE_URL` | 默认 `DeepSeek-V4.1-Flash` / `https://api.deepseek.com` | 可选 |
-| `REQUIRE_LOGIN` | 默认配了 Supabase 就要求登录；设 `0` 放开匿名 | 可选 |
-| `QUOTA_FREE` / `QUOTA_MEMBER` | 免费 / 会员每日配额，须与 `usage_today()` 一致 | 可选 |
-| `ANON_DAILY_QUOTA` | 仅 `REQUIRE_LOGIN=0` 时生效的匿名配额 | 可选 |
+| `FUNCTION_TIMEOUT_MS` | AI 赏析单次超时，默认 `9000`（适配 Netlify 免费版 10s 硬上限；Pro 可到 `25000`） | 可选 |
 | `REGISTER_MAX_PER_IP` / `REGISTER_MAX_PER_HOUR` | 注册风控上限 | 可选 |
 | `NODE_VERSION` | 建议 `20` | 建议 |
 
@@ -210,9 +219,8 @@ command = "node scripts/gen-supabase-config.js"
 
 **路由**：`netlify.toml` 把 `/api/*` 重写到 `/.netlify/functions/:splat`，`/admin` 重写到 `/admin.html`。
 
-> **函数超时**：Netlify 免费版硬上限 10 秒，而 DeepSeek 长文本推理容易超过。
-> 建议单次提交控制在 40 字以内；Pro 套餐可把 `netlify.toml` 里的 `[functions.<name>] timeout` 提到 26。
-> 注意 `functions.timeout` 必须是**逐函数声明的对象**，写成标量会导致 Netlify 拒绝部署。
+> **函数超时**：Netlify 免费版硬上限 10 秒。V5 起平仄查询不经过服务端（浏览器本地毫秒级返回），
+> 超时只可能影响 AI 赏析单次生成，且失败不影响已展示的查表结果。
 
 ### 🔎 百度站点验证（两种方式并存，互为备用）
 
@@ -233,7 +241,6 @@ command = "node scripts/gen-supabase-config.js"
 > 3. 跑 `node tools/sync-pingze.js`：它会自动把仓库里的旧验证文件当**孤儿文件**删除
 >    （见脚本「2.5 清理白名单外的孤儿文件」段），不需要手工 `git rm`；
 > 4. 更新 `结果/index.html` 的 meta 与本文档上表，再提交推送。
->
 
 ### ℹ️ 验证文件返回 304 是正常的，不是故障
 
@@ -263,6 +270,7 @@ curl -sS -o /dev/null -w "%{http_code} redirect=[%{redirect_url}]\n" \
 
 `node tools/check-domain.js` 的【3/5】段会自动跑这组矩阵（全新访客 / 伪造 ETag / 爬虫 UA 三者必须 200，
 正确 ETag 复访得 304 属预期），并在结论里显式说明「304 属预期，非错误」，避免把正常缓存协商误判成故障。
+
 > ⚠️ 仓库里**同时**保留多份历史验证文件并无好处：旧的码一旦失效就只是死文件，
 > 且站点根目录多一份可被扫到的文件。只保留当前生效的那一份。
 
@@ -271,7 +279,7 @@ curl -sS -o /dev/null -w "%{http_code} redirect=[%{redirect_url}]\n" \
 本站的 **Site settings → Build & deploy → Post processing → Pretty URLs 必须保持关闭**
 （API 里的 `processing_settings.html.pretty_urls = false`）。
 
-开启时 Netlify 会为每个 `.html` 生成 301：把 `/foo.html` 重定向到 **小写且去掉扩展名**的
+开启时 Netlify 会为每个 `.html` 生成 301：把 `/foo.html` 重定向到**小写且去掉扩展名**的
 `/foo`。这对站点验证文件是致命的——`结果/baidu_verify_codeva-W1T8O1gd3p.html` 会先被 301 到
 `/baidu_verify_codeva-w1t8o1gd3p`，百度/Google 的校验就会失败（它们要求目标 URL 首次请求即返回 200）。
 
@@ -330,6 +338,7 @@ gh api --method DELETE $REPO/environments/github-pages  # 清掉遗留的环境�
 **数据库侧防护**：RLS 只管「行」不管「列」，因此额外叠加了
 ① 先 `revoke update on <table>` 收整表、再 `grant update (安全列)` 按列放行；
 ② BEFORE UPDATE 守卫触发器还原受保护列。两者都在迁移脚本里。
+AI 配额的扣减只走 security definer 的 `ai_quota_consume(uuid)` RPC，前端无法直接写计数列。
 
 ---
 
@@ -339,7 +348,9 @@ gh api --method DELETE $REPO/environments/github-pages  # 清掉遗留的环境�
   `/api/register` 用 `service_role` 直接建「已确认」账号，因此任何人可用假邮箱注册，
   靠 `REGISTER_MAX_PER_IP` / `REGISTER_MAX_PER_HOUR` 防刷。
   接入自定义 SMTP（需自有域名配 SPF/DKIM/DMARC）后，应恢复邮箱确认并把注册改回 `client.auth.signUp`。
-- **免费版函数 10 秒超时**：长文本会被平台中断，前端已给出可操作提示（分批提交）。
+- **查表引擎刻意不做**文体判定、格律校验、马蹄韵与上下文消歧——与 V4.2 口径一致；
+  这些分析交给可选的 AI 赏析，且仅作提示。
+- **韵表未收录的字**（后起字 / 异体字）以「？」占位，位置不塌；重字不做繁简归一（云 ≠ 雲）。
 - **本仓库只收录程序本体**：批量清库、冒烟测试等运维脚本属于开发过程产物，未纳入。
 
 ---

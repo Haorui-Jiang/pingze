@@ -6,8 +6,9 @@
 //   · 本服务只保留四类接口：
 //       /api/health          健康检查
 //       /api/ai-insight      AI 平仄分析 / 诗词鉴赏（登录 + 配额，见 lib/ai-insight.js）
-//       /api/register        注册（绕开 Supabase 邮件确认限流，见 lib/auth.js）
 //       /api/admin-*         后台（管理员白名单，见 lib/admin.js）
+//   · 注册不在这里：前端直接用 Supabase 客户端 SDK 的 signUp，
+//     由 Supabase 发验证邮件（SMTP 已接 Resend），验证通过后才能登录。
 //   · API Key 仅从 .env / 环境变量读取，前端不再传入密钥。
 
 const http = require('http');
@@ -44,7 +45,6 @@ loadDotEnv();
 
 // Supabase 数据访问层（JWT 换用户等；与 Netlify Function 共用，避免两份漂移）
 const store = require('./lib/supabase-store');
-const authReg = require('./lib/auth');
 const admin = require('./lib/admin');
 const insight = require('./lib/ai-insight');
 
@@ -212,20 +212,14 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // ---------- 注册 ----------
-  // 走自己的接口而不是 Supabase 自带 signUp：绕开「每注册发一封确认邮件」
-  // 带来的 2 封/小时限流。详见 lib/auth.js 顶部说明。
-  if (req.method === 'POST' && req.url === '/api/register') {
-    readJsonBody(req, res, async (parsed) => {
-      try {
-        const out = await authReg.register(parsed.email, parsed.password, clientIp(req));
-        res.writeHead(out.status, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify(out.body));
-      } catch (e) {
-        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ error: '注册服务异常', detail: String(e) }));
-      }
-    });
+  // ---------- 注册：已退役（2026-10-16）----------
+  // 注册改由前端直接调 Supabase 的 signUp（客户端 SDK 用 anon key 即可），
+  // 由 Supabase 发验证邮件、验证通过后才拿得到 session。
+  // 原先这里的 /api/register 用 service_role 直接建号并写 email_confirm=true，
+  // 等于**跳过邮箱验证**，且该免验证入口在公网可被批量调用刷号薅 AI 额度，故移除。
+  if (req.url === '/api/register') {
+    res.writeHead(410, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ error: '注册接口已下线，请在前端完成注册。' }));
     return;
   }
 

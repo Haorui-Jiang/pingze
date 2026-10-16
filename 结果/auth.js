@@ -33,6 +33,8 @@
 
   var currentUser = null;
   var mode = 'signin'; // signin | signup
+  // 「验证邮件已发送」的待确认态所对应的邮箱；非空时 authSwitch 变成「重新发送」。
+  var pendingVerifyEmail = '';
   var lastInput = '';
   var lastResult = null;
   // 已经保存过的查询输入；用于防止对同一次查询结果重复入库
@@ -236,6 +238,8 @@
 
   function setMode(next) {
     mode = next;
+    // 用户主动切换登录/注册时，退出「待验证」态（否则重发按钮会一直挂着）
+    pendingVerifyEmail = '';
     var isSignIn = mode === 'signin';
     if ($('authTitle')) $('authTitle').textContent = isSignIn ? '登录' : '注册';
     var note = $('authQuotaNote');
@@ -256,7 +260,62 @@
     if (/User already registered/i.test(msg)) return '这个邮箱已经注册过了，直接登录吧';
     if (/Password should be at least/i.test(msg)) return '密码太短了，至少 6 位';
     if (/Unable to validate email/i.test(msg)) return '邮箱格式不对';
+    // 邮件发送类错误（换 Resend SMTP 后可能遇到）
+    if (/Email rate limit exceeded|over_email_send_rate_limit/i.test(msg)) {
+      return '验证邮件发送太频繁，请等一分钟后再试';
+    }
+    if (/send.*failed|smtp|mailer/i.test(msg)) {
+      return '验证邮件发送失败，请稍后重试或换个邮箱';
+    }
     return msg;
+  }
+
+  /**
+   * 重发验证邮件。
+   *
+   * 用 resend（而不是 register）是因为 Supabase 的 resend 只在「账号已存在但
+   * 未验证」时才真正发信，且对**已验证**的邮箱会静默返回成功——所以这里统一
+   * 返回 ok，不去猜具体结果，避免把「已验证」的用户误导去查邮件。
+   *
+   * 注意：不要把这里的错误原文抛给用户，可能包含内部细节。
+   */
+  async function resendVerify(email) {
+    if (!READY || !client || !email) return { ok: false };
+    try {
+      var r = await client.auth.resend({ type: 'signup', email: email });
+      // 「用户不存在」也算一种 ok：对用户而言就是「没有需要重发的验证」
+      if (r.error && /not found|does not exist|User not found/i.test(r.error.message || '')) {
+        return { ok: true };
+      }
+      return { ok: !r.error, reason: r.error ? prettyError(r.error) : '' };
+    } catch (e) {
+      return { ok: false, reason: '重发失败，请稍后再试' };
+    }
+  }
+
+  /**
+   * 「验证邮件已发送」的待确认态。
+   *
+   * 不直接关弹窗而是切成这个状态：用户此刻**还没有登录态**，如果照常关窗、
+   * 显示成「注册成功」，他会直接开始用查询记录和 AI 功能，然后到处找不到哪里
+   * 出问题。这里明确告知「先去查邮件、验证后回来登录」，并给一个重发入口。
+   *
+   * 用 pendingVerifyEmail 记录状态而不是给按钮挂 onclick：authSwitch 用的是
+   * addEventListener 绑定，赋 onclick 会与之叠加导致一次点击触发两次。
+   */
+  function showVerifyPending(email) {
+    pendingVerifyEmail = email;
+    setMode('signin');
+    $('authTitle').textContent = '验证邮箱';
+    $('authQuotaNote').textContent =
+      '验证邮件已发送到 ' + email + '，请在 24 小时内点击邮件里的链接完成验证。';
+    $('authEmail').value = email;
+    $('authPassword').value = '';
+    tip('注册成功！先去邮箱查收验证邮件（别忘了垃圾邮件夹），验证通过后再回来登录。');
+    var submit = $('authSubmit');
+    if (submit) submit.textContent = '登　录';
+    var sw = $('authSwitch');
+    if (sw) sw.textContent = '没收到验证邮件？重新发送';
   }
 
   async function submitAuth() {
@@ -275,22 +334,41 @@
       var payload = { email: email.trim(), password: password };
 
       if (mode === 'signup') {
-        // 不走 Supabase 自带 signUp：那会发确认邮件，而默认 SMTP 限 2 封/小时，
-        // 用户会卡在 over_email_send_rate_limit 上连账号都建不起来。
-        // 改由我们自己的后端用 service_role 建号并直接标记为已确认，全程不发邮件。
-        var r = await fetch('/api/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        var data = await r.json().catch(function () { return {}; });
-        if (!r.ok) return tip(data.error || '注册失败，请稍后重试', true);
-        // 注册成功后再用同一组凭据登录一次，拿到 session
-        var signin = await client.auth.signInWithPassword(payload);
-        if (signin.error) return tip(prettyError(signin.error), true);
-        closeModal();
-        await refresh();
-        return;
+        // 走 Supabase 原生 signUp：由 Supabase 发确认邮件（SMTP 已接Resend），
+        // 邮箱验证通过后才拿得到 session，登录态与 AI 配额都需先完成验证。
+        //
+        // 为什么不再走后端 /api/register（2026-10-16 移除）：
+        //   旧实现用 service_role 直接建号并写 email_confirm=true，等于**跳过**
+        //   邮箱验证，且这个免验证入口在公网上可被无限调用批量注册薅 AI 额度。
+        //   现在注册回到 Supabase 自己管，后端不再持有「代建号」这条路径。
+        //
+        // 两种返回都要处理：
+        //   · 已开启 Confirm email → session 为 null，必须提示去查邮件，不能当已登录；
+        //   · 未开启（Dashboard 里忘开）→ 直接返回 session，静默登录也不会出错。
+        var signed = await client.auth.signUp(payload);
+        if (signed.error) {
+          var emsg = prettyError(signed.error);
+          // 邮箱已存在但未验证过：不是「去登录」，而是要重发验证邮件
+          if (/already registered|already been registered/i.test(emsg) ||
+              /already exists|email_exists/i.test(emsg)) {
+            var resent = await resendVerify(email.trim());
+            return tip( resent.ok
+              ? '这个邮箱已注册。若没收到验证邮件，我们已重新发送，请查收（含垃圾邮件）。'
+              : '这个邮箱已经注册过了，直接登录吧。若一直没收到验证邮件，请确认邮箱地址无误。',
+              !resent.ok);
+          }
+          return tip(emsg, true);
+        }
+
+        if (signed.data && signed.data.session) {
+          // Dashboard 未开启邮箱确认时的兜底分支：有 session 即已是登录态
+          closeModal();
+          await refresh();
+          return tip('注册成功，已自动登录。');
+        }
+
+        // 正常路径：账号已建好，但必须先验证邮箱
+        return showVerifyPending(email.trim());
       }
 
       var res = await client.auth.signInWithPassword(payload);
@@ -688,6 +766,14 @@
     if ($('btnSaveQuery')) $('btnSaveQuery').addEventListener('click', saveQuery);
     if ($('authSubmit')) $('authSubmit').addEventListener('click', submitAuth);
     if ($('authSwitch')) $('authSwitch').addEventListener('click', function () {
+      // 「验证待确认」态下这个按钮是「没收到？重新发送」，不是切换登录/注册。
+      if (pendingVerifyEmail) {
+        var target = pendingVerifyEmail;
+        resendVerify(target).then(function (r) {
+          tip(r.ok ? '已重新发送，请查收邮件（含垃圾邮件夹）。' : (r.reason || '重发失败，请稍后再试'), !r.ok);
+        });
+        return;
+      }
       setMode(mode === 'signin' ? 'signup' : 'signin');
     });
     if ($('authClose')) $('authClose').addEventListener('click', closeModal);

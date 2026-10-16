@@ -46,6 +46,12 @@
    *  查表功能本身永久免费、不计次。 */
   var DAILY_QUOTA = 10;
 
+  /** AI 赏析类型 → 中文标签（与后端 lib/ai-insight.js 的 TYPES 白名单一致） */
+  var AI_KIND_LABEL = { analysis: 'AI 平仄分析', appreciation: 'AI 诗词鉴赏' };
+
+  /** content 列上限，与迁移 20261016094246 的 check 约束一致 */
+  var AI_CONTENT_MAX = 8000;
+
   function $(id) {
     return document.getElementById(id);
   }
@@ -312,6 +318,42 @@
   // ---------------------------------------------------------------- 查询记录（queries 表）
 
   /**
+   * 插入一条查询记录（只做插入，不碰 UI）。
+   * saveQuery 与「AI 结果入库前的自动保存」共用，避免两处各写一份入库逻辑。
+   * @returns {Promise<{ok:boolean, id?:string, error?:string}>}
+   */
+  async function insertQueryRow(input, result) {
+    var res = await client
+      .from('queries')
+      .insert({
+        user_id: currentUser.id,
+        input_text: String(input).slice(0, 1000),
+        result: result,
+      })
+      .select('id')
+      .single();
+    if (res.error) return { ok: false, error: prettyError(res.error) };
+    return { ok: true, id: res.data && res.data.id };
+  }
+
+  /**
+   * 确保「当前这次查询」在库里有对应记录，返回 query_id；没有就静默插一条。
+   *
+   * AI 赏析结果挂在外键 query_id 上，所以用户从没点过「保存本次查询」时，
+   * 也要先给他这次查询落一条记录，AI 内容才有地方存 —— 否则会出现
+   * 「AI 生成成功但查询记录里查不到」。静默插入不弹提示、不强制开面板。
+   */
+  async function ensureQuerySaved() {
+    if (!READY || !currentUser || !lastInput || !lastResult || !lastResult.ok) return null;
+    if (currentQueryId && savedForInput === lastInput) return currentQueryId;
+    var r = await insertQueryRow(lastInput, lastResult);
+    if (!r.ok) return null;
+    currentQueryId = r.id;
+    savedForInput = lastInput;
+    return r.id;
+  }
+
+  /**
    * 保存本次查询记录（input_text + 查表结果 jsonb）。
    * 表上 RLS：本人可读 / 本人可建 / 本人可删，无 UPDATE —— 记录不可篡改。
    */
@@ -341,21 +383,12 @@
     if (node) { node.textContent = ''; node.className = ''; }
 
     try {
-      var res = await client
-        .from('queries')
-        .insert({
-          user_id: currentUser.id,
-          input_text: String(lastInput).slice(0, 1000),
-          result: lastResult,
-        })
-        .select('id')
-        .single();
-
-      if (res.error) {
-        if (node) { node.textContent = '保存失败：' + prettyError(res.error); node.className = ''; }
+      var r = await insertQueryRow(lastInput, lastResult);
+      if (!r.ok) {
+        if (node) { node.textContent = '保存失败：' + r.error; node.className = ''; }
         return;
       }
-      currentQueryId = res.data && res.data.id;
+      currentQueryId = r.id;
       savedForInput = lastInput;
       if (node) { node.textContent = '已保存到「查询记录」✓'; node.className = 'ok'; }
       // 保存成功后自动打开「查询记录」面板并刷新内容；
@@ -367,6 +400,93 @@
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = '☆ 保存本次查询'; }
     }
+  }
+
+  // ---------------------------------------------------------------- AI 赏析入库（query_insights 表）
+
+  /**
+   * AI 赏析成功后回调：把内容写进 query_insights。
+   *
+   * 库表（迁移 20261016094246）append-only：无 UPDATE 授权，只能增/删，
+   * 与 queries 同口径。同一查询同一 kind 可有多条，展示时取最新一条。
+   *
+   * 入库失败绝不打扰用户：AI 内容已经显示在页面上了，存不进去只是
+   * 下次回看不到，不该用报错打断这次赏析体验。
+   */
+  async function onAiDone(kind, content, model) {
+    if (!READY || !currentUser) return null;
+    if (kind !== 'analysis' && kind !== 'appreciation') return null;
+    var text = String(content == null ? '' : content).trim();
+    if (!text) return null;
+
+    var qid = await ensureQuerySaved();
+    if (!qid) return null;
+
+    var res;
+    try {
+      res = await client
+        .from('query_insights')
+        .insert({
+          user_id: currentUser.id,
+          query_id: qid,
+          kind: kind,
+          content: text.slice(0, AI_CONTENT_MAX),
+          model: model || null,
+        })
+        .select('id')
+        .single();
+    } catch (e) {
+      return null;
+    }
+    if (res.error) return null;
+
+    // 面板开着就顺手刷新，用户能立刻在记录里看到刚生成的内容
+    if (recordsOpen()) loadRecords();
+    return res.data && res.data.id;
+  }
+
+  /**
+   * 读这些查询记录各自最新的一条 AI 赏析内容，按 query_id 归并成 Map。
+   * 单独一次 in(...) 查询即可，不做逐条 N+1。
+   * @param {Array<{id:string}>} rows 查询记录
+   * @returns {Promise<Object<string, {analysis?:object, appreciation?:object}>>}
+   */
+  async function loadInsightsFor(rows) {
+    var map = {};
+    var ids = rows.map(function (r) { return r.id; }).filter(Boolean);
+    if (!ids.length) return map;
+    var res;
+    try {
+      res = await client
+        .from('query_insights')
+        .select('query_id, kind, content, model, created_at')
+        .in('query_id', ids)
+        .order('created_at', { ascending: false });
+    } catch (e) {
+      // AI 内容读不出来不影响记录列表本身（平仄结果照常看）
+      return map;
+    }
+    if (res.error || !res.data) return map;
+    (res.data || []).forEach(function (r) {
+      var bucket = map[r.query_id] || (map[r.query_id] = {});
+      // 已按 created_at 倒序，先到先得 → 保留的即为最新一条
+      if (!bucket[r.kind]) bucket[r.kind] = r;
+    });
+    return map;
+  }
+
+  /** 记录卡片里折叠展示的 AI 内容块 */
+  function aiBlocksHtml(bucket) {
+    if (!bucket) return '';
+    var order = ['analysis', 'appreciation'];
+    var html = '';
+    order.forEach(function (kind) {
+      var it = bucket[kind];
+      if (!it || !it.content) return;
+      html += '<details class="hist-ai"><summary>' + AI_KIND_LABEL[kind] + '</summary>' +
+        '<pre class="hist-ai-body">' + escapeHtml(it.content) + '</pre></details>';
+    });
+    return html;
   }
 
   async function loadRecords() {
@@ -402,22 +522,29 @@
     }
     var rows = res.data || [];
     if (!rows.length) {
-      list.innerHTML = '<span class="hint">还没有查询记录。查询后点「☆ 保存本次查询」即可收藏到这里。</span>';
+      list.innerHTML = '<span class="hint">还没有查询记录。查询后点「☆ 保存本次查询」即可收藏到这里；生成 AI 赏析也会自动保存。</span>';
       return;
     }
+
+    // AI 赏析内容一并读出（失败也只是不显示，不影响平仄记录）
+    var insightMap = await loadInsightsFor(rows);
 
     var html = '';
     rows.forEach(function (r) {
       var s = summarize(r.result);
       // 显示全部输入文本（不截断、不折叠换行）
       var preview = String(r.input_text || '');
+      var bucket = insightMap[r.id];
+      var hasAi = !!(bucket && (bucket.analysis || bucket.appreciation));
       html += '<div class="hist-item" data-id="' + r.id + '">' +
-        '<div class="hist-meta">' + formatTime(r.created_at) + '</div>' +
+        '<div class="hist-meta">' + formatTime(r.created_at) +
+        (hasAi ? '<span class="hist-ai-flag">含 AI 赏析</span>' : '') + '</div>' +
         '<div class="hist-text">' + escapeHtml(preview) + '</div>' +
         '<div class="hist-tags"><span class="tone-ping">平 ' + (s ? s.ping : 0) + '</span>' +
         '<span class="tone-ze">仄 ' + (s ? s.ze : 0) + '</span>' +
         (s && s.tong ? '<span class="tone-tong">通 ' + s.tong + '</span>' : '') +
         '<button class="mini-btn rec-del" data-act="del" title="删除这条记录">删除</button></div>' +
+        aiBlocksHtml(bucket) +
         '</div>';
     });
     list.innerHTML = html;
@@ -426,13 +553,24 @@
       var id = node.getAttribute('data-id');
       var row = rows.filter(function (x) { return x.id === id; })[0];
       if (!row) return;
-      // 点正文：把原文载回输入框，并把当时保存的查表结果重新渲染出来
+      var bucket = insightMap[id];
+      // 点正文：把原文载回输入框，并把当时保存的查表结果与 AI 内容重新渲染出来
       var textNode = node.querySelector('.hist-text');
       if (textNode) textNode.addEventListener('click', function () {
         var ta = $('poem');
         if (ta) ta.value = row.input_text || '';
-        if (row.result && typeof window.renderResult === 'function') {
-          window.renderResult(row.result);
+        if (window.renderResult) window.renderResult(row.result);
+        // 告诉账号系统「当前就是这条记录」：后续 AI 生成会挂回这一条，
+        // 不会在库里重复插一条同名查询
+        if (window.PingzeAuth) {
+          window.PingzeAuth.onQueryDone(row.input_text || '', row.result, row.id);
+        }
+        // AI 内容回放：只填文本，不代用户勾开关（开关仍可自行打开重新生成）
+        if (window.showAiRecord) {
+          window.showAiRecord({
+            analysis: bucket && bucket.analysis ? bucket.analysis.content : '',
+            appreciation: bucket && bucket.appreciation ? bucket.appreciation.content : '',
+          });
         }
         window.scrollTo({ top: 0, behavior: 'smooth' });
       });
@@ -475,16 +613,23 @@
     getUser: function () {
       return currentUser;
     },
-    /** 每次查询完成后由 index.html 回调 */
-    onQueryDone: function (input, result) {
+    /** 每次查询完成后由 index.html 回调
+     *  @param {string} input
+     *  @param {object} result
+     *  @param {string} [queryId] 回放已有记录时传入其 id：
+     *        这样后续 AI 生成会挂回这条记录，而不是重复插一条查询。 */
+    onQueryDone: function (input, result, queryId) {
       lastInput = input || '';
       lastResult = result || null;
       // 换了新的查询结果 -> 重新允许「保存本次查询」
-      if (lastInput !== savedForInput) {
-        currentQueryId = null;
-        savedForInput = '';
+      if (lastInput !== savedForInput || (queryId && queryId !== currentQueryId)) {
+        currentQueryId = queryId || null;
+        savedForInput = queryId ? lastInput : '';
         var tipNode = $('saveTip');
-        if (tipNode && currentUser) { tipNode.textContent = ''; tipNode.className = ''; }
+        if (tipNode && currentUser) {
+          tipNode.textContent = queryId ? '这条记录已在「查询记录」中 ✓' : '';
+          tipNode.className = queryId ? 'ok' : '';
+        }
       }
       setDisplay('btnSaveQuery', !!currentUser && !!lastInput, 'inline-block');
       if (currentUser) loadQuota();
@@ -493,6 +638,8 @@
     },
     /** 保存本次查询记录（未登录会先弹登录框） */
     saveQuery: saveQuery,
+    /** AI 赏析生成成功后回调：内容入库（内部先确保查询记录已存在） */
+    onAiDone: onAiDone,
     openLogin: openLogin,
     /** 会员/配额状态 */
     isMember: isMember,

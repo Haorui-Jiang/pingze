@@ -49,3 +49,45 @@
   from = "/pingshui-yun"
   to = "/pingshui-yun.html"
   status = 200
+
+# =====================================================================
+#  安全响应头（2026-10-16 上线前安全审查 P2-1）
+#
+#  实测修复前线上只有 HSTS，缺下面这些。每一项的作用：
+#    · X-Frame-Options      防点击劫持。/admin 尤其重要 —— 它是能改会员等级的
+#                          操作页，被 iframe 嵌套 + 诱导点击即可在管理员不知情
+#                          下触发操作。
+#    · X-Content-Type-Options  禁 MIME 嗅探，防止把非 HTML 响应当脚本执行。
+#    · Referrer-Policy       不把站内 URL 带出到第三方。
+#    · Permissions-Policy    关掉本站用不到的敏感能力（摄像头/麦克风/地理位置等），
+#                          减少供应链攻击的可利用面。
+#    · Content-Security-Policy  见下方说明，**当前是宽松版**。
+#    · Strict-Transport-Security 由 Netlify 默认已下发（max-age=31536000），
+#      这里不重复设置，避免与平台行为不一致。
+#
+#  CSP 为什么是宽松版：站点现有页面有较多内联 <script> 与内联事件处理器，
+#  一次性改成只允许 external 会直接白屏。宽松版先拿到
+#  「禁止外部资源注入（base-uri/form-action/object-src）+ 禁止内联 eval」
+#  这些**零改造就能生效**的收益；后续把内联脚本外置后再逐步加严
+#  （去掉 'unsafe-inline'）。改 CSP 前务必本地与线上双验。
+# =====================================================================
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "geolocation=(), microphone=(), camera=(), payment=(), usb=(), interest-cohort=()"
+    Content-Security-Policy = "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://*.supabase.co; font-src 'self' data:"
+
+# 后台页额外禁止被搜索引擎收录（robots.txt 只是「请求遵守」，
+# 这里与 admin.html 里的 <meta name="robots"> 形成双保险）。
+[[headers]]
+  for = "/admin"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/admin.html"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"

@@ -47,6 +47,14 @@ loadDotEnv();
 const store = require('./lib/supabase-store');
 const admin = require('./lib/admin');
 const insight = require('./lib/ai-insight');
+const limiter = require('./lib/rate-limit');
+
+// AI 接口的 IP 级限流（2026-10-16 安全审查 P1-1）。
+// 口径：配额管「总量」，限流管「速率」，两道都要有。
+// 20 次/分钟对正常用户足够宽松（免费用户一天总共才 3 次），
+// 对「配额耗尽前瞬间打完」和「并发压接口」两种滥用形态足够收紧。
+const AI_RATE_LIMIT = Number(process.env.AI_RATE_LIMIT_PER_MIN) || 20;
+const AI_RATE_WINDOW_MS = 60 * 1000;
 
 const PORT = process.env.PORT || 3000;
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || '';
@@ -188,6 +196,23 @@ const server = http.createServer((req, res) => {
   // ---------- AI 赏析（平仄分析 / 诗词鉴赏，登录 + 配额）----------
   // 查表不经过这里；只有前端勾选了某个 AI 开关才会请求本接口。
   if (req.method === 'POST' && req.url === '/api/ai-insight') {
+    // IP 级限流（2026-10-16 安全审查 P1-1）：
+    // AI 是唯一花钱的接口，此前只有「每日配额」一道护栏，没有速率限制。
+    // 限流放在解析请求体之前 —— 被限流的请求不做任何昂贵工作。
+    const rl = limiter.hit(limiter.clientIp(req), {
+      limit: AI_RATE_LIMIT,
+      windowMs: AI_RATE_WINDOW_MS,
+      prefix: 'ai',
+      message: 'AI 请求过于频繁，请稍后再试。平仄与韵部查询不受影响。',
+    });
+    if (!rl.ok) {
+      res.writeHead(429, {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Retry-After': String(rl.retryAfterSec),
+      });
+      res.end(JSON.stringify({ ok: false, status: 429, error: rl.message, retryAfterSec: rl.retryAfterSec }));
+      return;
+    }
     readJsonBody(req, res, async (parsed) => {
       // 全函数总预算：本地无平台硬限时，但同一套 deadline 口径保证
       // 「模型再慢也会在预算内返回结构化错误」而不是挂死请求
@@ -205,8 +230,9 @@ const server = http.createServer((req, res) => {
         res.writeHead(out.status || (out.ok ? 200 : 500), { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify(out));
       } catch (e) {
+        console.error('[local] /api/ai-insight 未捕获异常:', (e && e.stack) || e);
         res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ error: 'AI 服务异常', detail: String(e) }));
+        res.end(JSON.stringify({ ok: false, status: 500, error: 'AI 服务异常，请稍后重试。' }));
       }
     });
     return;

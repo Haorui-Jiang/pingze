@@ -664,6 +664,20 @@ async function generateAi(type) {
     }
     if (data.error) {
       out.textContent = '生成失败：' + data.error;
+      // 429 = 触发 IP 级限流（20 次/分钟）。服务端已带人话，这里只补一句
+      // 「不影响查表」并按 Retry-After 冷却，避免用户连点反复吃 429。
+      if (r.status === 429) {
+        var wait = Number(data.retryAfterSec) || 30;
+        out.textContent += '\n请约 ' + wait + ' 秒后再试（平仄与韵部查询不受影响）。';
+        var cool = function () { setTimeout(function () { runAi(type); }, wait * 1000); };
+        // 冷却后再试一次；仍失败则把按钮交还给用户，避免无限自动重试。
+        cool();
+      }
+      // 503 = 配额服务不可用，服务端 fail-closed 拒绝执行（防重复计费）。
+      // 这不是用户能解决的，明确说清「本次未扣次数」，避免误以为额度被吞。
+      if (r.status === 503) {
+        out.textContent += '\n（本次请求未执行，也未消耗你的额度。）';
+      }
       // 今日免费额度用尽：顺便把开通会员的二维码弹出来，别让用户卡死在这一步
       if (data.needUpgrade && window.PingzeAuth && window.PingzeAuth.openUpgradeQr) {
         window.PingzeAuth.openUpgradeQr(

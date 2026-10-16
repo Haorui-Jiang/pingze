@@ -41,6 +41,7 @@
 
 ### 三、账号与数据
 
+- **邮箱验证必填**：注册走 `client.auth.signUp()`，由 Supabase 发验证邮件，**验证通过后才拿得到 session**；未验证账号登录会被拒。
 - **邮箱密码注册 / 登录**：基于 Supabase Auth，会话自动刷新。
 - **查询记录**：登录用户可保存每次查询（「☆ 保存本次查询」），在记录面板中回放与删除；面板可折叠，按钮文案随开关状态切换；RLS 保证只能读 / 建 / 删自己的记录。
 - **AI 赏析结果一并入库**：生成 AI 平仄分析 / 诗词鉴赏后，内容自动写入 `query_insights` 表（append-only，RLS 与 `queries` 同口径）。若这次查询此前从未保存过，会先静默补一条 `queries` 记录作为挂载点，因此「从没点过保存也能在记录里看到 AI 内容」。同一条记录的同一类型重复生成会追加多条，展示时取最新一条。
@@ -54,7 +55,6 @@
 - **付费引导**：AI 额度用尽时弹出二维码引导开通会员（30 天 ¥30）；配额判定以服务端 RPC 为准，刷新页面无法绕过。
 - **管理后台 `/admin`**：邮箱白名单鉴权（`ADMIN_EMAILS`，服务端用 service_role 重新校验 JWT，前端仅作体验层），可浏览用户列表、查询记录数、今日 AI 用量、注册/最近登录时间（东八区），以及开通 / 降级会员与到期倒计时。
 - **会员有效期**：`tier=member` 且 `member_expires_at > now()` 才算有效；到期不自动降级，仅失活，由运营人决定续费或降级，便于对账。
-- **注册风控**：单 IP 每小时上限 + 全站每小时上限；计数异常时宁放行不误挡。
 
 ### 五、工程特性
 
@@ -102,12 +102,10 @@ pingze/
 │   └── 二维码.jpg             # 会员付费引导二维码
 ├── lib/                       # 本地后端与 Serverless 函数共用的服务端逻辑
 │   ├── supabase-store.js      # Supabase REST 访问层、JWT 换用户
-│   ├── auth.js                # 用户身份识别、注册限流
 │   ├── admin.js               # 管理员鉴权 + 用户列表 + 改会员等级
 │   └── ai-insight.js          # AI 赏析：登录校验、原子配额、DeepSeek 调用（V5 新增）
 ├── netlify/functions/         # 线上后端（与本地后端行为一致）
 │   ├── ai-insight.js          # POST /api/ai-insight（type: analysis | appreciation）
-│   ├── register.js            # POST /api/register
 │   ├── admin-users.js         # GET  /api/admin-users
 │   └── admin-set-tier.js      # POST /api/admin-set-tier
 ├── supabase/migrations/       # 数据库迁移脚本（按文件名顺序执行）
@@ -120,7 +118,7 @@ pingze/
 └── LICENSE
 ```
 
-> V5 起已删除旧的 `netlify/functions/analyze.js`（AI 逐字判平仄）——平仄判定改为纯前端查表，`/api/analyze` 路由随之废弃。
+> V5 起已删除旧的 `netlify/functions/analyze.js`（AI 逐字判平仄）——平仄判定改为纯前端查表，`/api/analyze` 路由随之废弃。`register.js`（后端代建号）已于 2026-10-16 随注册改走 Supabase `signUp` + 邮箱验证一并删除——**注册完全不经过后端**。
 
 ---
 
@@ -221,7 +219,6 @@ command = "node scripts/gen-supabase-config.js"
 | `FUNCTION_TIMEOUT_MS` | AI 赏析的**全函数总预算**（毫秒），默认 `8000`。冷启动、Supabase 往返、模型调用、序列化都从这算；实际生效值 = `min(FUNCTION_TIMEOUT_MS, PLATFORM_LIMIT_MS - 500)` | 可选 |
 | `PLATFORM_LIMIT_MS` | 部署平台对同步函数的硬限时，默认 `10000`（Netlify 免费版 10s；Pro 可到 `26000`，同时调大 `FUNCTION_TIMEOUT_MS`） | 可选 |
 | `SUPABASE_TIMEOUT_MS` | Supabase 单次请求超时，默认 `5000`（防止卡住吃掉 AI 接口的整个预算） | 可选 |
-| `REGISTER_MAX_PER_IP` / `REGISTER_MAX_PER_HOUR` | 注册风控上限 | 可选 |
 | `NODE_VERSION` | 建议 `20` | 建议 |
 
 > `SUPABASE_ANON_KEY` 的作用域必须包含 **builds**，否则构建期读不到。
@@ -354,12 +351,20 @@ AI 配额的扣减只走 security definer 的 `ai_quota_consume(uuid)` RPC，前
 
 ---
 
+## 📮 注册与邮箱验证
+
+注册需邮箱验证：前端 `结果/auth.js` 调 `client.auth.signUp()`，由 Supabase 发验证邮件（站点已接 Resend SMTP，
+`noreply@pingze.site`，发信域名已验证），**验证通过后才拿得到 session**；未验证账号登录会被拒
+（`Email not confirmed`），因此也用不了 AI 赏析。注册不经过任何后端接口（原 `/api/register` 已下线）。
+
+配置前提：Supabase Dashboard → Authentication → Providers → Email 的 **Confirm email 须开启**，
+URL Configuration 的 **Site URL 设为 `https://www.pingze.site`**（留空会让验证链接回跳到 localhost）。
+改这两项时注意：**只配 SMTP 不等于开启验证**。
+
+---
+
 ## ⚠️ 已知限制
 
-- **注册不校验邮箱真实性**：为绕开 Supabase 默认 SMTP 的严格限流，注册走服务端
-  `/api/register` 用 `service_role` 直接建「已确认」账号，因此任何人可用假邮箱注册，
-  靠 `REGISTER_MAX_PER_IP` / `REGISTER_MAX_PER_HOUR` 防刷。
-  接入自定义 SMTP（需自有域名配 SPF/DKIM/DMARC）后，应恢复邮箱确认并把注册改回 `client.auth.signUp`。
 - **查表引擎刻意不做**文体判定、格律校验、马蹄韵与上下文消歧——与参考网站（zhgc.com/pz/pz.asp）方法一致；
   这些分析交给可选的 AI 赏析，且仅作提示。
 - **韵表未收录的字**（后起字 / 异体字）以「？」占位，位置不塌；重字不做繁简归一（云 ≠ 雲）。

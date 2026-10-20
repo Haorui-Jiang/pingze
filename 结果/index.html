@@ -147,6 +147,36 @@
   .pz-tail em { font-style: normal; font-size: 12px; color: var(--ink-soft); }
   .pz-tail-none { color: var(--ink-soft); }
 
+  /* 单字悬停弹窗：显示该字所属全部韵部，点韵部名跳平水韵页（pz-tip.js 驱动） */
+  .pz-tip {
+    position: fixed; left: 0; top: 0; z-index: 60; display: none;
+    max-width: 280px; padding: 10px 12px;
+    background: #fffdf8; border: 1px solid var(--seal-soft); border-radius: 10px;
+    box-shadow: 0 10px 28px rgba(60,45,30,0.26); cursor: default;
+  }
+  .pz-tip.on { display: block; }
+  .pz-tip .pt-hd { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+  .pz-tip .pt-ch { font-size: 22px; line-height: 1; color: var(--ink); }
+  .pz-tip .pt-tone { font-size: 12px; letter-spacing: 1px; color: var(--ink-soft); }
+  .pz-tip .pt-tone.ping { color: var(--ping); }
+  .pz-tip .pt-tone.ze { color: var(--ze); }
+  .pz-tip .pt-tone.tong { color: var(--gold); }
+  .pz-tip .pt-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pz-tip .pt-yun {
+    display: inline-flex; align-items: center; gap: 4px; font-size: 13.5px;
+    color: var(--seal); text-decoration: none; letter-spacing: 1px;
+    background: var(--paper-2); border: 1px solid var(--line); border-radius: 6px;
+    padding: 2px 9px; cursor: pointer;
+  }
+  .pz-tip .pt-yun:hover { background: rgba(192,86,79,0.12); border-color: var(--seal-soft); }
+  .pz-tip .pt-badge { font-style: normal; font-size: 11px; padding: 0 4px; border-radius: 3px; color: #fff; }
+  .pz-tip .pt-badge.ping { background: var(--ping); }
+  .pz-tip .pt-badge.ze { background: var(--ze); }
+  .pz-tip .pt-none { font-size: 13px; color: var(--ink-soft); }
+  .pz-tip .pt-ft { font-size: 11.5px; color: var(--ink-faint, #9a938a); margin-top: 7px; letter-spacing: 0; }
+  /* 触屏无 hover：让单元格可点 */
+  @media (hover: none) { .pz-cell { cursor: pointer; } }
+
   /* AI 赏析：双开关，默认全关、零请求 */
   .ai-block {
     margin-top: 18px; border: 1px dashed var(--line); border-radius: 10px;
@@ -348,7 +378,7 @@ var _hmt = _hmt || [];
     <h2>查询结果</h2>
     <div class="meta-grid" id="metaGrid"></div>
 
-    <div class="grid-title">逐字平仄（每句一行，行尾 ◆ 为句尾字韵部）</div>
+    <div class="grid-title">逐字平仄（每句一行，行尾 ◆ 为句尾字韵部；鼠标移到字上可看它所属的全部韵部）</div>
     <div class="pz-grid" id="pzGrid"></div>
 
     <div class="ai-block">
@@ -380,6 +410,9 @@ var _hmt = _hmt || [];
   </div>
 
   <div id="errorBox"></div>
+
+  <!-- 单字悬停弹窗（内容由 pz-tip.js 按该字所属韵部现填；唯一 fixed 元素） -->
+  <div class="pz-tip" id="pzTip" role="tooltip" aria-live="polite"></div>
 
   <!-- ===== 静态说明：关键词承载区，也是给搜索引擎看的可抓取文案，勿删 ===== -->
   <div class="card" id="seoIntro">
@@ -475,6 +508,7 @@ var _hmt = _hmt || [];
 <script src="supabase-config.js"></script>
 <script src="pingshui-yun-data.js"></script>
 <script src="pingze-engine.js"></script>
+<script src="pz-tip.js"></script>
 <script src="auth.js"></script>
 <script>
 /** 本次查询的原始输入与查表结果（保存记录 / AI 赏析共用） */
@@ -544,12 +578,17 @@ function render(res) {
     '<div class="meta"><div class="k">未收录</div><div class="v" style="color:var(--ink-soft)">' + res.unknown + '</div></div>';
 
   // 逐字平仄：每句一行，未收录字以「？」占位（位置不塌）
+  // data-ch / data-tone / data-yun 供悬停弹窗（pz-tip.js）读取，韵部多值以「|」分隔
   var gridHtml = '';
   res.lines.forEach(function (ln) {
     var cells = ln.cells.map(function (c) {
       var cls = c.tone === '平' ? 'ping' : c.tone === '仄' ? 'ze' : c.tone === '通' ? 'tong' : 'unknown';
       var label = c.tone === '通' ? '通' : (c.tone === '' ? '？' : c.tone);
-      return '<div class="pz-cell ' + cls + '"><div class="ch">' + esc(c.ch) + '</div><div class="tone">' + label + '</div></div>';
+      return '<div class="pz-cell ' + cls + '"' +
+        ' data-ch="' + esc(c.ch) + '"' +
+        ' data-tone="' + esc(c.tone) + '"' +
+        ' data-yun="' + esc((c.yun || []).join('|')) + '">' +
+        '<div class="ch">' + esc(c.ch) + '</div><div class="tone">' + label + '</div></div>';
     }).join('');
     var tailPart;
     if (ln.tailYun.length) {
@@ -759,6 +798,14 @@ function updateLenHint() {
 }
 
 wireAiSwitches();
+
+/**
+ * 单字悬停弹窗：显示该字所属全部韵部，点韵部名跳平水韵页对应位置。
+ * 事件是委托绑在容器上的（结果区每次查询整体重绘），所以只需挂一次。
+ */
+if (window.PZTip) {
+  window.PZTip.attach(document.getElementById('pzGrid'), document.getElementById('pzTip'));
+}
 </script>
 
 <!-- Supabase 浏览器端 SDK（UMD 版，无需构建步骤）。

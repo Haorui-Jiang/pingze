@@ -294,6 +294,7 @@ var _hmt = _hmt || [];
       <input type="text" id="filter" placeholder="按韵目名或韵字筛选（如：东、江阳）" autocomplete="off" />
       <button class="mini-btn" id="btnExpand">展开全部</button>
     </div>
+    <p class="note" id="jumpTip" style="display:none"></p>
     <div class="yun-list" id="yunList"></div>
     <div class="empty" id="yunEmpty" style="display:none">没有匹配的韵部。</div>
   </div>
@@ -447,9 +448,49 @@ var _hmt = _hmt || [];
     var el = box.querySelector('.yun[data-i="' + i + '"]');
     if (!el) return false;
     el.classList.add('open');
+    // 直接加 .open 不经过点击，标题右侧的「展开 ▾」文案要一并改，否则与实际状态矛盾
+    var arrow = el.querySelector('.yh .arrow');
+    if (arrow) arrow.textContent = '收起 ▴';
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return true;
   }
+
+  // ---------- 深链定位（首页「逐字平仄」弹窗里的韵部超链接跳过来）----------
+  // 链接形如 /pingshui-yun#yun-<韵部下标>-<字>，序号由首页按韵表现查，不写死名字。
+  // 必做的三件事：① 清掉筛选/关键字，否则目标韵部可能被过滤掉而找不到；
+  //              ② 展开该韵部；③ 滚到它并高亮来的那个字。
+  function applyHash() {
+    var m = /^#yun-(\d+)(?:-(.+))?$/.exec(location.hash || '');
+    var tipEl = document.getElementById('jumpTip');
+    if (!m) {
+      if (tipEl) { tipEl.style.display = 'none'; tipEl.textContent = ''; }
+      return;
+    }
+    var i = parseInt(m[1], 10);
+    var hit = '';
+    if (m[2]) { try { hit = decodeURIComponent(m[2]); } catch (e) { hit = m[2]; } }
+
+    state.filter = 'all';
+    state.kw = '';
+    document.getElementById('filter').value = '';
+    Array.prototype.forEach.call(document.querySelectorAll('#tabs .mini-btn'), function (x) {
+      x.classList.toggle('on', x.getAttribute('data-filter') === 'all');
+    });
+
+    if (!(i >= 0 && i < YUN.length)) {
+      if (tipEl) { tipEl.style.display = 'none'; tipEl.textContent = ''; }
+      return;
+    }
+    var y = YUN[i];
+    if (tipEl) {
+      tipEl.style.display = 'block';
+      tipEl.innerHTML = '已定位到 <b>' + esc(y.t + y.n) + '</b> 韵部' +
+        (hit ? '，高亮的是「' + esc(hit) + '」字' : '') +
+        '（点标题可收起）';
+    }
+    openYun(i, hit);
+  }
+  window.addEventListener('hashchange', applyHash);
 
   // 点击韵部标题：展开 / 收起
   box.addEventListener('click', function (e) {
@@ -535,6 +576,7 @@ var _hmt = _hmt || [];
   });
 
   renderList();
+  applyHash();
 })();
 </script>
 </body>

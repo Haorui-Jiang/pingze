@@ -572,7 +572,14 @@
           '设置成功之前无法关闭本窗口 —— 否则密码没改、却留下一个已登录状态。'
         : '先验证原密码，再设置新密码（新密码要输入两遍）。';
     }
+    // ★ 每次打开都要把**所有**输入框的显隐复位，不能只管 pwdCurrent。
+    //   改密成功后为了做「完成」态，这里曾把三个框全设成 display:none；
+    //   而 pwdNew / pwdNew2 从没被复位，于是「成功过一次之后再打开弹层」
+    //   只剩一个孤零零的原密码框（2026-10-20 线上截图反馈的实际 bug）。
+    //   可见性是 openPwdModal 的责任，成功态去隐藏它、失败/成功都不该留下残留。
     setDisplay('pwdCurrent', !isRecover, 'block');
+    setDisplay('pwdNew', true, 'block');
+    setDisplay('pwdNew2', true, 'block');
     setDisplay('pwdSubmit', true);
     setDisplay('pwdTip', true);
     ['pwdCurrent', 'pwdNew', 'pwdNew2'].forEach(function (id) {
@@ -680,7 +687,8 @@
       if (upd.error) return pwdTip(prettyError(upd.error), true);
 
       // 成功：解除锁定 + 弹层切成「完成」态而不是直接关掉，
-      // 否则用户不知道到底改没改成
+      // 否则用户不知道到底改没改成。
+      // 去隐藏输入框只为这一屏的观感，下次 openPwdModal() 会全部复位。
       done = true;
       setRecovering(false);
       var mailTo = (currentUser && currentUser.email) || '';

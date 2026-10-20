@@ -10,6 +10,14 @@
  *   · 新增「查询记录」：登录用户的查询输入+结果存 queries 表（只增/删，不可改）；
  *   · AI 赏析配额改读 profiles 轻量列（rpc ai_usage_today），不再有 usage_today()。
  *
+ * 2026-10-20 新增「修改密码」：
+ *   · userbar 的 #btnPwd 仅登录态显示；弹层 pwdMode=change 时先验旧密码再改；
+ *   · 登录框 #authForgot 走 resetPasswordForEmail 发重置邮件；
+ *   · pwdMode=recover 处理邮件链接落地（PASSWORD_RECOVERY 事件 / URL type=recovery）。
+ *   · 改密成功后明确提示确认邮件已发往该邮箱 —— 该邮件由 Supabase 的
+ *     **安全通知**模板发出，项目侧默认关闭，须在 Dashboard 手动开启
+ *     （见 supabase/config.toml 的 [auth.email.notification.password_changed]）。
+ *
  * 降级原则：只要配置缺失或 CDN 没加载成功，整套登录功能静默关闭，
  * 原有的「匿名查表」链路必须照常可用 —— 不能因为接了账号系统就把站搞挂。
  */
@@ -561,6 +569,7 @@
 
       // 成功：弹层切成「完成」态而不是直接关掉，否则用户不知道到底改没改成
       done = true;
+      var mailTo = (currentUser && currentUser.email) || '';
       if ($('pwdTitle')) $('pwdTitle').textContent = '密码已修改';
       if ($('pwdNote')) $('pwdNote').textContent = '请牢记新密码，下次登录请使用新密码。';
       setDisplay('pwdCurrent', false);
@@ -569,7 +578,12 @@
       setDisplay('pwdSubmit', false);
       var cls = $('pwdClose');
       if (cls) cls.textContent = '完成';
-      pwdTip('修改成功。');
+      // 必须明确告知确认邮件已发：这是一封**安全通知**，用户没收到就等于
+      // 「有没有人偷改我密码」的预警失效了，别静默成功让用户无从察觉。
+      // 前提：Supabase 侧必须已开启 `mailer_notifications_password_changed_enabled`
+      //（安全通知默认关闭，不开就收不到；见 supabase/config.toml 同名配置段注释）。
+      pwdTip('修改成功。密码变更确认通知已发往 ' + mailTo +
+        '，请留意收件箱（含垃圾邮件）；若非本人操作，请立即用「忘记密码」重置密码。');
       await refresh();
     } catch (e) {
       pwdTip('网络异常：' + (e && e.message ? e.message : e), true);

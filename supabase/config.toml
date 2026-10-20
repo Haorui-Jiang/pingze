@@ -250,11 +250,25 @@ otp_expiry = 3600
 # subject = "You have been invited"
 # content_path = "./supabase/templates/invite.html"
 
-# Uncomment to customize notification email template
-# [auth.email.notification.password_changed]
-# enabled = true
-# subject = "Your password has been changed"
-# content_path = "./supabase/templates/password_changed_notification.html"
+# 「忘记密码」重置邮件（2026-10-20 启用中文版）
+# content_path 指向工作区内的真实文件，**单一数据源**：改文案只改
+# supabase/templates/recovery.html，线上 Dashboard 粘贴同一份内容即可。
+[auth.email.template.recovery]
+subject = "重置你在「平仄韵目查询」的密码"
+content_path = "./supabase/templates/recovery.html"
+
+# 「密码已更改」安全通知（2026-10-20 启用）
+#
+# ★ 这是**安全通知**而非认证邮件：Supabase 默认在项目级**关闭**，不打开这个
+#   开关，改密后收不到任何确认邮件（这正是「直接就能改密、没有邮件」的原因）。
+#   托管项目在 Dashboard → Authentication → Emails → 安全通知里开；
+#   对应 Management API 字段 `mailer_notifications_password_changed_enabled`。
+#   前端 结果/auth.js 改密成功后会明确提示「确认邮件已发往你的邮箱」，
+#   所以这个开关不开就会变成对用户说了假话 —— 改代码前后都确认它是开的。
+[auth.email.notification.password_changed]
+enabled = true
+subject = "你在「平仄韵目查询」的密码已被修改"
+content_path = "./supabase/templates/password_changed_notification.html"
 
 [auth.sms]
 # Allow/disallow new user signups via SMS to your project.

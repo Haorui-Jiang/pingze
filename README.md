@@ -11,7 +11,7 @@
 
 > 输入一首诗词，**逐字标注平仄**、给出每句尾字的《平水韵》韵部。
 > 平仄判定走**浏览器本地字典查表**（平水韵 106 韵、七千余字），毫秒级返回、断网可用、不调用大模型；
-> AI（DeepSeek）只做**可选的**「平仄分析 / 诗词鉴赏」，双开关默认关闭，登录后按次计配额。
+> AI（DeepSeek）只做**可选的**「平仄分析 / 诗词鉴赏 / 诗词翻译」，三个开关默认关闭，登录后按次计配额。
 > 参考网站：`http://www.zhgc.com/pz/pz.asp`
 
 **在线体验**：<https://www.pingze.site/>
@@ -30,21 +30,22 @@
 - **一键复制**：完整结果（原文 + 平仄串 + 尾字韵部 + 统计）整段复制到剪贴板。
 - **零服务端成本**：判定全在浏览器完成，不请求后端、不耗配额、断网可用；查询**永久免费、无需登录**。
 
-### 二、AI 赏析（可选，双开关）
+### 二、AI 赏析（可选，三个独立开关）
 
-- **两个独立开关**：「AI 平仄分析」与「诗词鉴赏」，**默认全关**；勾选后才出现生成按钮，未勾选时零请求（浏览器网络面板可验证）。
+- **三个独立开关**：「AI 平仄分析」「诗词鉴赏」「诗词翻译」，**默认全关**；勾选后才出现生成按钮，未勾选时零请求（浏览器网络面板可验证）。
 - **AI 平仄分析**：以本地查表结果（平仄串、尾字韵部）为确定输入，判粘对、孤平、三平尾、拗救、对仗、押韵归类——提示词明确要求「以传入查表结果为准，不得自行改判」。
 - **诗词鉴赏**：意境、章法、修辞、典故。
-- **服务端防绕过**：开关与配额都在服务端二次校验，不信前端；先原子扣减配额再调模型，配额故障时降级放行。
+- **诗词翻译**：古文原文 → **现代汉语白话**，输出「逐句白话译文 + 疑难字词注释（通假字 / 词类活用 / 倒装 / 省略 / 双关）+ 译文要点」三段；提示词明确要求只出白话、不夹带英日等其他外语译文。
+- **服务端防绕过**：开关与配额都在服务端二次校验，不信前端；**先原子扣减配额再调模型**，且配额记账为 **fail-closed** —— 记账（Supabase 往返）出现任何不确定的失败一律返回 503拒绝本次请求，**绝不「不扣次数放行去调模型」**（那是被并发压测主动触发的免费白嫖通道）；连续失败达阈值即熔断 30s，避免故障期间每次请求都等满超时预算。AI 是本项目唯一花钱的接口，用一点可用性换账单安全是刻意取舍。
 - **失败隔离**：AI 失败只影响当次赏析，上方查表结果不受任何影响。
-- **按次计配额**：免费 3 次/天、会员 10 次/天，按北京时间自然日重置（`ai_usage_today()` / `ai_quota_consume()` 两个 RPC，后者 security definer 原子扣减）。
+- **按次计配额**：免费 3 次/天、会员 10 次/天，按北京时间自然日重置（`ai_usage_today()` / `ai_quota_consume()` 两个 RPC，后者 security definer 原子扣减）。模型超时 / 失败**也已扣次**（防重试循环烧钱）。
 
 ### 三、账号与数据
 
 - **邮箱验证必填**：注册走 `client.auth.signUp()`，由 Supabase 发验证邮件，**验证通过后才拿得到 session**；未验证账号登录会被拒。
 - **邮箱密码注册 / 登录**：基于 Supabase Auth，会话自动刷新。
 - **查询记录**：登录用户可保存每次查询（「☆ 保存本次查询」），在记录面板中回放与删除；面板可折叠，按钮文案随开关状态切换；RLS 保证只能读 / 建 / 删自己的记录。
-- **AI 赏析结果一并入库**：生成 AI 平仄分析 / 诗词鉴赏后，内容自动写入 `query_insights` 表（append-only，RLS 与 `queries` 同口径）。若这次查询此前从未保存过，会先静默补一条 `queries` 记录作为挂载点，因此「从没点过保存也能在记录里看到 AI 内容」。同一条记录的同一类型重复生成会追加多条，展示时取最新一条。
+- **AI 赏析结果一并入库**：生成 AI 平仄分析 / 诗词鉴赏 / 白话译文后，内容自动写入 `query_insights` 表（append-only，RLS 与 `queries` 同口径）。若这次查询此前从未保存过，会先静默补一条 `queries` 记录作为挂载点，因此「从没点过保存也能在记录里看到 AI 内容」。同一条记录的同一类型重复生成会追加多条，展示时取最新一条。
 - **记录里直接看 AI**：记录卡片右上角标「含 AI 赏析」，正文下方以折叠块展示 AI 内容；点击记录正文回放时，查表结果与 AI 文本一并载入结果区（开关不代勾，用户可自行重新生成）。删除查询记录时 AI 内容随外键级联删除，不留孤儿。
 - **保存即见**：点保存后面板自动打开并刷新；原本已打开则只刷新不滚动；未登录时三处提示「登录后可保存」。
 - **查询后自动定位**：点「查询」后结果窗口平滑滚入视口（失败时滚到错误提示），长文本下不必手动往下找。
@@ -61,6 +62,7 @@
 - **零依赖、零构建**：前端原生 HTML / CSS / JS，后端只用 Node 内置模块，无 `node_modules`。
 - **本地与线上同一份逻辑**：`lib/` 下的共享库同时被本地后端与 Netlify 函数引用，避免两份实现漂移。
 - **严格数据隔离**：数据库启用 RLS + 列级权限；用户无法把自己改成 `member` 或篡改配额计数。
+- **AI 能力清单是四方契约**：AI 的三种能力（平仄分析 / 诗词鉴赏 / 诗词翻译）分散登记在**四处**——后端 `TYPES` 白名单、`PROMPTS` 键、`结果/auth.js` 的 `AI_KIND_LABEL`、DB 里 `query_insights.kind` 的 check 约束。任一处漏改都是**静默故障**（DB 约束漏改尤其阴险：页面照常显示，只是记录永远存不下来）。前端则由 `结果/index.html` 的单一登记表 `AI_KINDS` 驱动开关 / 按钮 / 输出块 / 锁定 / 回放，加一个能力只改一处。`node tools/verify-ai-kinds.js`（23 断言）从真实文件解析出各份清单并断言相等，同时校验每个 UI 三件套 id 真的存在于 HTML。
 - **东八区时间口径**：数据库默认时区为 `Asia/Shanghai`，所有时间戳（注册时间、到期时间等）渲染为东八区；存储仍是 UTC 绝对时间。
 - **SEO 就绪**：两个公开页（`/` 与 `/pingshui-yun`）配置了 title / description / keywords / OG 与百度统计；`tools/gen-sitemap.js` 自动生成 sitemap。
 
@@ -90,22 +92,27 @@
 ```
 pingze/
 ├── 结果/                      # 静态站点发布目录（netlify.toml 里 publish = "结果"）
-│   ├── index.html             # 首页：查表界面 + 登录/注册弹层 + 查询记录面板 + AI 双开关 + 付费二维码弹层
+│   ├── index.html             # 首页：查表界面 + 登录/注册弹层 + 查询记录面板 + AI 三个开关 + 付费二维码弹层
 │   │                          #   　<head> 内含百度站点验证 meta（见「站点验证」小节）
 │   ├── pingshui-yun.html      # 平水韵 106 韵韵部对照表（SEO 承载页）
 │   ├── pingshui-yun-data.js   # 韵表数据（window.PINGSHUI_YUN）
 │   ├── pingze-engine.js       # 本地查表引擎：平仄 / 尾字韵部 / 重字（V5 核心，UMD）
-│   ├── auth.js                # 前端认证与数据层：登录、查询记录、配额
+│   ├── pz-tip.js              # 单字悬停弹窗：显示该字所属全部韵部（UMD，事件委托绑容器）
+│   ├── auth.js                # 前端认证与数据层：登录、查询记录、配额、AI 内容入库
 │   ├── admin.html  admin.js   # 管理后台（邮箱白名单鉴权）
+│   ├── vendor/                # 自托管第三方库（supabase-js UMD，2.118.0）
 │   ├── supabase-config.example.js  # 前端配置模板（复制为 supabase-config.js 后填真实值）
 │   ├── baidu_verify_codeva-W1T8O1gd3p.html  # 百度站长平台站点归属验证文件，**文件名与内容不可改动**
 │   └── 二维码.jpg             # 会员付费引导二维码
 ├── lib/                       # 本地后端与 Serverless 函数共用的服务端逻辑
 │   ├── supabase-store.js      # Supabase REST 访问层、JWT 换用户
 │   ├── admin.js               # 管理员鉴权 + 用户列表 + 改会员等级
-│   └── ai-insight.js          # AI 赏析：登录校验、原子配额、DeepSeek 调用（V5 新增）
+│   ├── account-lookup.js      # 「忘记密码」前的邮箱存在性查询（带限流，防枚举滥用）
+│   ├── rate-limit.js          # IP 级限流（内存计数，函数重启即清空）
+│   └── ai-insight.js          # AI 赏析：登录校验、原子配额（fail-closed）、超时预算、DeepSeek 调用
 ├── netlify/functions/         # 线上后端（与本地后端行为一致）
-│   ├── ai-insight.js          # POST /api/ai-insight（type: analysis | appreciation）
+│   ├── ai-insight.js          # POST /api/ai-insight（type: analysis | appreciation | translation）
+│   ├── check-email.js         # POST /api/check-email（邮箱存在性，带限流）
 │   ├── admin-users.js         # GET  /api/admin-users
 │   └── admin-set-tier.js      # POST /api/admin-set-tier
 ├── supabase/migrations/       # 数据库迁移脚本（按文件名顺序执行）
@@ -173,6 +180,8 @@ curl http://localhost:3000/api/health
 | `0007_v5_query_engine.sql` | **V5 主迁移**：删除 poems / analyses / analysis_cache / api_usage / feedback 五张表；新建 `queries` 查询记录表（RLS 本人可读/建/删，anon 全 revoke）；profiles 增加 `ai_used_date` / `ai_used_count` 轻量计数列；创建 `ai_usage_today()` / `ai_quota_consume(uuid)` 两个 RPC |
 | `20261016000347_set_timezone_cst.sql` | 数据库默认时区改为 `Asia/Shanghai`（时间戳渲染东八区，存储不变） |
 | `20261016094246_add_query_insights.sql` | 新建 `query_insights` 表存 AI 赏析内容（外键 `query_id → queries` 级联删除，RLS 与 `queries` 同口径：本人可读 / 建 / 删、无 UPDATE，append-only）；`kind` 用 check 锁死 `analysis` / `appreciation` |
+| `20261016093000_harden_permissions.sql` | 权限收口：撤函数的 `PUBLIC EXECUTE`（PostgreSQL 默认带，只撤具体角色是静默 no-op）、列级 REVOKE、新表显式收权 |
+| `20261020113000_add_translation_insight.sql` | 把 `query_insights.kind` 的 check 约束放宽为 `analysis` / `appreciation` / `translation`（AI 白话译文）。**加枚举值而非加列**——该表刻意不给 UPDATE（append-only），加列就得放开 UPDATE 才能填值，会破坏「记录不可篡改」的既有语义。迁移先从 `pg_constraint` 查出约束**真实名字**再 drop，不硬编码自动命名 |
 
 3. 建表后如 REST 接口看不到新表，执行一次 `NOTIFY pgrst, 'reload schema';` 刷新 PostgREST 的 schema 缓存。
 

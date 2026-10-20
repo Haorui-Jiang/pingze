@@ -13,7 +13,8 @@
 > *Ping Shui Rhyme* (平水韵) category of each sentence's final character.
 > Tonal analysis runs as a **local dictionary lookup in the browser** (106 rhyme categories, 7,000+ characters) —
 > millisecond results, works offline, no LLM involved. AI (DeepSeek) powers only **optional**
-> prosody analysis / poetic appreciation behind two independent toggles, quota-metered for signed-in users.
+> prosody analysis / poetic appreciation / plain-verse translation behind three independent toggles,
+> quota-metered for signed-in users.
 > Reference site: `http://www.zhgc.com/pz/pz.asp`
 
 **Live demo**: <https://www.pingze.site/>
@@ -39,20 +40,31 @@
 - **Zero server cost**: everything runs in the browser — no backend request, no quota, works offline.
   The query is **permanently free and requires no login**.
 
-### 2. AI insight (optional, dual toggles)
+### 2. AI insight (optional, three independent toggles)
 
-- **Two independent switches**: "AI prosody analysis" and "poetic appreciation", **both off by default**;
-  the generate button only appears when a switch is on, and no request is made while both are off
-  (verifiable in the browser's network panel).
+- **Three independent switches**: "AI prosody analysis", "poetic appreciation" and "plain-verse
+  translation", **all off by default**; the generate button only appears when a switch is on, and no
+  request is made while all are off (verifiable in the browser's network panel).
 - **AI prosody analysis**: takes the deterministic local lookup result (tone string, rhyme categories) as
   input and evaluates adherence, lonely ping, triple-ping endings,救 remedies, antithesis, and rhyme grouping —
   the prompt explicitly requires the model to treat the passed-in table as authoritative.
 - **Poetic appreciation**: imagery, structure, rhetoric, and allusions.
+- **Plain-verse translation**: classical Chinese → **modern vernacular Chinese**, emitted as three
+  sections — a line-by-line translation, notes on the words that resist literal translation (phonetic
+  loans, changed word class, inversion, ellipsis, pun), and a short statement of the piece's gist. The
+  prompt explicitly forbids slipping in English, Japanese or any other foreign-language translation.
 - **Server-side enforcement**: switch state and quota are re-validated on the server; quota is deducted
-  atomically *before* calling the model, and a quota outage degrades to "allow" rather than blocking.
+  atomically *before* calling the model, and accounting is **fail-closed** — any uncertain failure of the
+  accounting round-trip (Supabase) returns 503 and **refuses the request outright**, never "skip the
+  deduction and call the model anyway" (that would be a free-use channel an attacker could deliberately
+  trigger with concurrent load). After 3 consecutive failures a 30s breaker short-circuits further
+  attempts, so an outage doesn't stretch every request to the full timeout budget. AI is the only
+  billable endpoint here, so trading a little availability for billing safety is a deliberate choice.
 - **Failure isolation**: an AI failure only affects that one generation — the lookup result above stays intact.
 - **Per-call quota**: 3/day for free users, 10/day for members, reset on the Beijing-time calendar day
   (`ai_usage_today()` / `ai_quota_consume()` RPCs; the latter is security definer for atomic deduction).
+  A model timeout or failure **still consumes the call** by design, which prevents retry loops from
+  burning money.
 
 ### 3. Accounts and data
 
@@ -62,6 +74,15 @@
 - **Query records**: signed-in users can save each query ("☆ Save this query") and replay or delete it from
   the records panel; the panel collapses and the button label follows its state; RLS guarantees you can only
   read / insert / delete your own records.
+- **AI output is persisted too**: after generating prosody analysis, appreciation or a plain-verse
+  translation, the content is written to the `query_insights` table (append-only, same RLS posture as
+  `queries`). If the query had never been saved, a `queries` row is silently inserted first to act as the
+  mount point — so "never pressed save, still see the AI content in the records panel" works. Regenerating
+  the same kind for the same query appends another row; the newest is the one shown.
+- **AI content is readable in the records panel**: each record is badged "含 AI 赏析" when it has any, and
+  the content appears below the text in collapsible blocks. Clicking a record's text replays both the
+  lookup result and the AI text into the result area (switches are *not* ticked for you). Deleting the
+  query cascades the AI content away via the foreign key, leaving no orphans.
 - **Save-and-see**: saving auto-opens and refreshes the panel (already-open panels only refresh, no scroll);
   three hints tell anonymous visitors that saving requires signing in.
 
@@ -86,6 +107,14 @@
   the Netlify functions, so the two backends cannot drift apart.
 - **Strict data isolation**: RLS policies plus column-level privileges; users cannot promote themselves to
   `member` or tamper with quota counters.
+- **The AI capability list is a four-way contract**: the three AI capabilities (prosody analysis /
+  appreciation / translation) are registered in **four** places — the backend `TYPES` allow-list, the
+  `PROMPTS` keys, `AI_KIND_LABEL` in `结果/auth.js`, and the `query_insights.kind` check constraint in
+  the database. Missing any one of them is a **silent failure** (missing the DB constraint is the subtlest:
+  the page renders fine, but the content is simply never persisted). On the frontend, a single registry
+  (`AI_KINDS` in `结果/index.html`) drives the switches, buttons, output blocks, locking and replay, so
+  adding a capability means editing one place. `node tools/verify-ai-kinds.js` (23 assertions) parses the
+  real files, asserts the lists match, and checks that every UI id actually exists in the HTML.
 - **Beijing-time everywhere**: the database default timezone is `Asia/Shanghai`, so all timestamps render in
   UTC+8 while storage stays in absolute UTC.
 - **SEO ready**: both public pages (`/` and `/pingshui-yun`) carry title / description / keywords / OG tags and
@@ -119,22 +148,27 @@
 ```
 pingze/
 ├── 结果/                      # Static site publish directory (netlify.toml: publish = "结果")
-│   ├── index.html             # Home: lookup UI + auth modals + query-records panel + AI dual toggles + upgrade QR modal
+│   ├── index.html             # Home: lookup UI + auth modals + query-records panel + AI three toggles + upgrade QR modal
 │   │                          #   　<head> contains the Baidu site-verification meta (see "Site verification")
 │   ├── pingshui-yun.html      # Ping Shui Rhyme 106-category reference table (SEO page)
 │   ├── pingshui-yun-data.js   # Rhyme table data (window.PINGSHUI_YUN)
 │   ├── pingze-engine.js       # Local lookup engine: tones / final-char rhymes / duplicates (V5 core, UMD)
-│   ├── auth.js                # Frontend auth & data layer: sign-in, query records, quota
+│   ├── pz-tip.js              # Per-character hover tooltip listing every rhyme category the character belongs to (UMD, delegated events)
+│   ├── auth.js                # Frontend auth & data layer: sign-in, query records, quota, AI persistence
 │   ├── admin.html  admin.js   # Admin console (email allow-list auth)
+│   ├── vendor/                # Self-hosted third-party libraries (supabase-js UMD, 2.118.0)
 │   ├── supabase-config.example.js  # Frontend config template (copy to supabase-config.js and fill in)
 │   ├── baidu_verify_codeva-W1T8O1gd3p.html  # Baidu site-ownership verification file — name and content must not change
 │   └── 二维码.jpg             # Membership payment QR code
 ├── lib/                       # Server-side logic shared by the local backend and the Netlify functions
 │   ├── supabase-store.js      # Supabase REST access layer, JWT → user
 │   ├── admin.js               # Admin auth + user listing + membership tier changes
-│   └── ai-insight.js          # AI insight: login check, atomic quota, DeepSeek call (new in V5)
+│   ├── account-lookup.js      # Email-existence lookup backing "forgot password" (rate-limited)
+│   ├── rate-limit.js          # Per-IP rate limiting (in-memory; resets when the function cold-starts)
+│   └── ai-insight.js          # AI insight: login check, atomic fail-closed quota, timeout budget, DeepSeek call
 ├── netlify/functions/         # Production backend (behaviour-identical to the local one)
-│   ├── ai-insight.js          # POST /api/ai-insight (type: analysis | appreciation)
+│   ├── ai-insight.js          # POST /api/ai-insight (type: analysis | appreciation | translation)
+│   ├── check-email.js         # POST /api/check-email (email existence, rate-limited)
 │   ├── admin-users.js         # GET  /api/admin-users
 │   └── admin-set-tier.js      # POST /api/admin-set-tier
 ├── supabase/migrations/       # Database migrations (run in filename order)
@@ -209,6 +243,9 @@ If the port is busy, run `PORT=3001 npm start`.
 | `0006_membership.sql` | Membership: `tier` / `member_since` / `member_expires_at`, validity rules, and anti-promotion triggers |
 | `0007_v5_query_engine.sql` | **V5 main migration**: drops the poems / analyses / analysis_cache / api_usage / feedback tables; creates the `queries` table (RLS: own rows read/insert/delete, anon fully revoked); adds `ai_used_date` / `ai_used_count` counter columns to profiles; creates the `ai_usage_today()` / `ai_quota_consume(uuid)` RPCs |
 | `20261016000347_set_timezone_cst.sql` | Sets the database default timezone to `Asia/Shanghai` (timestamps render in UTC+8; storage unchanged) |
+| `20261016094246_add_query_insights.sql` | Creates the `query_insights` table for AI output (FK `query_id → queries` with cascade delete; RLS matching `queries`: own rows read/insert/delete, no UPDATE — append-only); `kind` locked by a check constraint to `analysis` / `appreciation` |
+| `20261016093000_harden_permissions.sql` | Permission hardening: revoke functions' `PUBLIC EXECUTE` (PostgreSQL grants it by default, so revoking only named roles is a silent no-op), column-level REVOKE, explicit revocation on new tables |
+| `20261020113000_add_translation_insight.sql` | Widens the `query_insights.kind` check constraint to `analysis` / `appreciation` / `translation` (plain-verse translation). **Adds an enum value rather than a column** — the table deliberately denies UPDATE (append-only), so a new column would force us to grant UPDATE just to fill it, breaking the existing "records are immutable" semantics. The migration looks the constraint's **real name** up in `pg_constraint` before dropping it rather than hardcoding the auto-generated name |
 
 3. If new tables are not visible over REST afterwards, run `NOTIFY pgrst, 'reload schema';`
    once to refresh the PostgREST schema cache.

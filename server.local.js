@@ -3,9 +3,10 @@
 // V5 架构（2026-10-16）：
 //   · 平仄 / 韵部 / 重字查询 = 浏览器本地查表（结果/pingze-engine.js +
 //     pingshui-yun-data.js），不经过本服务、不调用任何大模型。
-//   · 本服务只保留四类接口：
+//   · 本服务只保留五类接口：
 //       /api/health          健康检查
 //       /api/ai-insight      AI 平仄分析 / 诗词鉴赏（登录 + 配额，见 lib/ai-insight.js）
+//       /api/check-email     「忘记密码」判定邮箱是否已注册（见 lib/account-lookup.js）
 //       /api/admin-*         后台（管理员白名单，见 lib/admin.js）
 //   · 注册不在这里：前端直接用 Supabase 客户端 SDK 的 signUp，
 //     由 Supabase 发验证邮件（SMTP 已接 Resend），验证通过后才能登录。
@@ -48,6 +49,7 @@ const store = require('./lib/supabase-store');
 const admin = require('./lib/admin');
 const insight = require('./lib/ai-insight');
 const limiter = require('./lib/rate-limit');
+const lookup = require('./lib/account-lookup');
 
 // AI 接口的 IP 级限流（2026-10-16 安全审查 P1-1）。
 // 口径：配额管「总量」，限流管「速率」，两道都要有。
@@ -55,6 +57,11 @@ const limiter = require('./lib/rate-limit');
 // 对「配额耗尽前瞬间打完」和「并发压接口」两种滥用形态足够收紧。
 const AI_RATE_LIMIT = Number(process.env.AI_RATE_LIMIT_PER_MIN) || 20;
 const AI_RATE_WINDOW_MS = 60 * 1000;
+
+// 「忘记密码」的邮箱存在性判定限流。比 AI 更紧：AI 是花钱，这个接口泄露
+// 「哪些邮箱注册过」。默认 10 次 / 10 分钟 / IP，手抖输错十来次够用。
+// 与 netlify/functions/check-email.js 取值一致，改一处两处都要改。
+const CHECK_EMAIL_RATE_LIMIT = Number(process.env.CHECK_EMAIL_RATE_LIMIT) || 10;
 
 const PORT = process.env.PORT || 3000;
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || '';
@@ -246,6 +253,43 @@ const server = http.createServer((req, res) => {
   if (req.url === '/api/register') {
     res.writeHead(410, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({ error: '注册接口已下线，请在前端完成注册。' }));
+    return;
+  }
+
+  // ---------- 「忘记密码」：判定邮箱是否已注册 ----------
+  // Supabase 的 resetPasswordForEmail 对不存在的邮箱也返回成功（防邮箱枚举），
+  // 所以前端拿不到存在性信号、输错邮箱时只会干等一封不存在的邮件。
+  // 这里补一次判定，让「邮箱输错」能当场提示。判定逻辑与线上共用
+  // lib/account-lookup.js，本地与 Netlify 行为一致。
+  if (req.method === 'POST' && req.url === '/api/check-email') {
+    // 限流比 AI 更紧：AI 是花钱，这个接口是泄露「哪些邮箱注册过」。
+    const rl = limiter.hit(limiter.clientIp(req), {
+      limit: CHECK_EMAIL_RATE_LIMIT,
+      windowMs: 10 * 60 * 1000,
+      prefix: 'chkemail',
+      message: '校验次数过多，请约 10 分钟后再试。平仄查询不受影响。',
+    });
+    if (!rl.ok) {
+      res.writeHead(429, {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Retry-After': String(rl.retryAfterSec),
+      });
+      res.end(JSON.stringify({ ok: false, reason: 'rate_limited', error: rl.message, retryAfterSec: rl.retryAfterSec }));
+      return;
+    }
+    readJsonBody(req, res, async (parsed) => {
+      const out = await lookup.emailExists(parsed.email);
+      // 查不出来 ≠ 邮箱不存在：回 503 让前端降级为「照常发信」，
+      // 绝不能在这里把服务端故障说成「邮箱输入错误」。
+      if (!out.ok) {
+        console.error('[local] /api/check-email 查询失败:', out.reason);
+        res.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ ok: false, reason: out.reason, error: '邮箱校验暂时不可用，请稍后重试。' }));
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: true, exists: out.exists }));
+    });
     return;
   }
 

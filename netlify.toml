@@ -25,6 +25,10 @@
   timeout = 10
 [functions.admin-set-tier]
   timeout = 10
+# 「忘记密码」判定邮箱是否已注册：只查一次 profiles（走唯一索引），
+# 相比 AI 链路极轻，但仍给 10s 上限以防平台把慢请求拖成 504。
+[functions.check-email]
+  timeout = 10
 
 # 将前端请求的 /api/* 映射到 Serverless 函数（/:splat 即函数名）
 # 实际调用路径：/.netlify/functions/<函数名>

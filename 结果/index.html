@@ -435,10 +435,10 @@ var _hmt = _hmt || [];
   <div class="modal-mask" id="pwdModal">
     <div class="modal">
       <h3 id="pwdTitle">修改密码</h3>
-      <p class="hint modal-note" id="pwdNote">先验证当前密码，再设置新密码。</p>
-      <input id="pwdCurrent" type="password" placeholder="当前密码" autocomplete="current-password">
+      <p class="hint modal-note" id="pwdNote">先验证原密码，再设置新密码（新密码要输入两遍）。</p>
+      <input id="pwdCurrent" type="password" placeholder="原密码" autocomplete="current-password">
       <input id="pwdNew" type="password" placeholder="新密码（至少 8 位，含字母和数字）" autocomplete="new-password">
-      <input id="pwdNew2" type="password" placeholder="再输入一次新密码" autocomplete="new-password">
+      <input id="pwdNew2" type="password" placeholder="确认新密码（再输入一遍）" autocomplete="new-password">
       <p class="hint" id="pwdTip"></p>
       <button class="btn" id="pwdSubmit">保 存 新 密 码</button>
       <div class="modal-actions">

@@ -279,7 +279,7 @@
     var note = $('authQuotaNote');
     if (note) {
       note.textContent = isForgot
-        ? '填写注册时用的邮箱，我们会发一封带「重置密码」链接的邮件给你（有效期 1 小时，请留意垃圾邮件夹）。'
+        ? '填写注册时用的邮箱；若该邮箱没有注册过会当场提示。验证通过后我们会发一封带「重置密码」链接的邮件（有效期 1 小时，请留意垃圾邮件夹）。'
         : (isSignIn ? '登录后' : '注册后') +
           '查询记录可保存；AI 平仄分析 / 诗词鉴赏每日免费 3 次，会员 ' + DAILY_QUOTA + ' 次';
     }
@@ -370,7 +370,16 @@
   }
 
   /**
-   * 「忘记密码」：给填写的邮箱发一封带重置链接的邮件。
+   * 「忘记密码」：先确认邮箱是否已注册，再发重置邮件。
+   *
+   * 为什么要多这一步：Supabase 的 resetPasswordForEmail() 对**不存在的邮箱
+   * 也返回成功**（刻意的防邮箱枚举设计），所以邮箱输错时用户看到的同样是
+   * 「邮件已发送」，然后一直等一封永远不会来的邮件。本站要求「邮箱错就当场
+   * 提示」，故先用 /api/check-email 判一次存在性。
+   *
+   * 降级原则（重要）：这个校验是**体验增强，不是发信的前置条件**。
+   * 接口挂了 / 被限流 / 网络不通时，一律**照常发信**，绝不能因为一个辅助
+   * 校验不可用就把用户挡在「找回密码」门外 —— 那比提示不友好严重得多。
    *
    * 链接回到本站后，Supabase 会用邮件里的 token 换一份**临时会话**
    * （auth 事件 PASSWORD_RECOVERY / URL 带 type=recovery），本文件据此弹出
@@ -387,6 +396,15 @@
     var btn = $('authSubmit');
     if (btn) btn.disabled = true;
     tip('发送中…');
+
+    // ① 判存在性。只在明确查到「没这个邮箱」时才拦下来。
+    //    查不到（网络/限流/服务端故障）一律当通过，继续发信。
+    var known = await checkEmailRegistered(email);
+    if (known === false) {
+      if (btn) btn.disabled = false;
+      return tip('这个邮箱没有注册过，请核对后重新输入（要用注册时填写的那个邮箱）。', true);
+    }
+
     try {
       var r = await client.auth.resetPasswordForEmail(email, {
         redirectTo: window.location.origin + window.location.pathname,
@@ -397,6 +415,29 @@
       tip('网络异常：' + (e && e.message ? e.message : e), true);
     } finally {
       if (btn) btn.disabled = false;
+    }
+  }
+
+  /**
+   * 问后端「这个邮箱注册过吗」。
+   *
+   * @returns {Promise<boolean|null>} true=已注册；false=明确没注册过；
+   *          null=**没问出来**（接口不可用/限流/网络异常），调用方应按「放行」处理。
+   */
+  async function checkEmailRegistered(email) {
+    try {
+      var res = await fetch('/api/check-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email }),
+      });
+      if (!res.ok) return null;
+      var data = await res.json();
+      // 只认服务端明确的布尔结论；字段缺失/类型不对一律当「没问出来」
+      if (!data || data.ok !== true || typeof data.exists !== 'boolean') return null;
+      return data.exists;
+    } catch (e) {
+      return null;
     }
   }
 
@@ -497,8 +538,8 @@
     if ($('pwdTitle')) $('pwdTitle').textContent = isRecover ? '设置新密码' : '修改密码';
     if ($('pwdNote')) {
       $('pwdNote').textContent = isRecover
-        ? '你通过邮件里的重置链接进入了改密流程，设置一个新密码即可。'
-        : '先验证当前密码，再设置新密码。';
+        ? '你通过邮件里的重置链接进入了改密流程，设置一个新密码即可（新密码要输入两遍）。'
+        : '先验证原密码，再设置新密码（新密码要输入两遍）。';
     }
     setDisplay('pwdCurrent', !isRecover, 'block');
     setDisplay('pwdSubmit', true);

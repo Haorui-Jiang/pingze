@@ -32,9 +32,14 @@
     : null;
 
   var currentUser = null;
-  var mode = 'signin'; // signin | signup
+  var mode = 'signin'; // signin | signup | forgot
   // 「验证邮件已发送」的待确认态所对应的邮箱；非空时 authSwitch 变成「重新发送」。
   var pendingVerifyEmail = '';
+  // 「修改密码」弹层的两种模式（同一个弹层、两种校验强度）：
+  //   change  —— 站内已登录：先验当前密码，再设新密码
+  //   recover —— 点「重置密码」邮件里的链接回来：Supabase 已用邮件 token 换好
+  //              临时会话（auth 事件 PASSWORD_RECOVERY），只需设新密码
+  var pwdMode = 'change';
   var lastInput = '';
   var lastResult = null;
   // 已经保存过的查询输入；用于防止对同一次查询结果重复入库
@@ -67,6 +72,23 @@
     if (!node) return;
     node.textContent = msg || '';
     node.className = isError ? 'hint err-tip' : 'hint';
+  }
+  /** 「修改密码」弹层的提示行，与 tip() 同口径但落在自己的节点上 */
+  function pwdTip(msg, isError) {
+    var node = $('pwdTip');
+    if (!node) return;
+    node.textContent = msg || '';
+    node.className = isError ? 'hint err-tip' : 'hint';
+  }
+  /**
+   * 密码强度校验（注册 / 登录 / 改密三处共用同一口径，避免三处规则漂移）。
+   * @returns {string} 空串表示通过，否则是给用户看的原因
+   */
+  function passwordProblem(pwd) {
+    if (!pwd) return '密码不能为空';
+    if (pwd.length < 8) return '密码至少 8 位';
+    if (!/[A-Za-z]/.test(pwd) || !/\d/.test(pwd)) return '密码要同时包含字母和数字';
+    return '';
   }
   function formatTime(iso) {
     var d = new Date(iso);
@@ -115,6 +137,7 @@
       currentUser = null;
       setDisplay('btnLogout', false);
       setDisplay('btnRecords', false);
+      setDisplay('btnPwd', false);
       setDisplay('btnAuth', true);
       var info0 = $('userInfo');
       if (info0) info0.textContent = '未登录 · 查表免费，登录后可保存查询记录';
@@ -127,6 +150,8 @@
     setDisplay('btnAuth', !currentUser, 'inline-block');
     setDisplay('btnLogout', !!currentUser, 'inline-block');
     setDisplay('btnRecords', !!currentUser, 'inline-block');
+    // 「修改密码」是登录后才存在的操作：未登录一律不显示入口
+    setDisplay('btnPwd', !!currentUser, 'inline-block');
     setDisplay('btnSaveQuery', !!currentUser && !!lastInput, 'inline-block');
 
     var label = $('userInfo');
@@ -241,14 +266,23 @@
     // 用户主动切换登录/注册时，退出「待验证」态（否则重发按钮会一直挂着）
     pendingVerifyEmail = '';
     var isSignIn = mode === 'signin';
-    if ($('authTitle')) $('authTitle').textContent = isSignIn ? '登录' : '注册';
+    var isForgot = mode === 'forgot';
+    if ($('authTitle')) $('authTitle').textContent = isForgot ? '重置密码' : (isSignIn ? '登录' : '注册');
     var note = $('authQuotaNote');
     if (note) {
-      note.textContent = (isSignIn ? '登录后' : '注册后') +
-        '查询记录可保存；AI 平仄分析 / 诗词鉴赏每日免费 3 次，会员 ' + DAILY_QUOTA + ' 次';
+      note.textContent = isForgot
+        ? '填写注册时用的邮箱，我们会发一封带「重置密码」链接的邮件给你（有效期 1 小时，请留意垃圾邮件夹）。'
+        : (isSignIn ? '登录后' : '注册后') +
+          '查询记录可保存；AI 平仄分析 / 诗词鉴赏每日免费 3 次，会员 ' + DAILY_QUOTA + ' 次';
     }
-    if ($('authSubmit')) $('authSubmit').textContent = isSignIn ? '登　录' : '注　册';
-    if ($('authSwitch')) $('authSwitch').textContent = isSignIn ? '没有账号？去注册' : '已有账号？去登录';
+    if ($('authSubmit')) $('authSubmit').textContent = isForgot ? '发送重置邮件' : (isSignIn ? '登　录' : '注　册');
+    if ($('authSwitch')) $('authSwitch').textContent = isForgot ? '返回登录' : (isSignIn ? '没有账号？去注册' : '已有账号？去登录');
+    // 已在「忘记密码」态就不用再显示同一个入口了
+    setDisplay('authForgot', !isForgot, 'inline-block');
+    // 「忘记密码」只要邮箱，密码框隐藏
+    setDisplay('authPassword', !isForgot, 'block');
+    var pwd = $('authPassword');
+    if (isForgot && pwd) pwd.value = '';
   }
 
   function prettyError(error) {
@@ -259,6 +293,7 @@
     if (/Email not confirmed/i.test(msg)) return '邮箱还没确认，请先查收确认邮件';
     if (/User already registered/i.test(msg)) return '这个邮箱已经注册过了，直接登录吧';
     if (/Password should be at least/i.test(msg)) return '密码太短了，至少 6 位';
+    if (/should be different from the old password/i.test(msg)) return '新密码不能和当前密码一样';
     if (/Unable to validate email/i.test(msg)) return '邮箱格式不对';
     // 邮件发送类错误（换 Resend SMTP 后可能遇到）
     if (/Error sending confirmation email/i.test(msg)) {
@@ -326,14 +361,46 @@
     if (sw) sw.textContent = '没收到验证邮件？重新发送';
   }
 
+  /**
+   * 「忘记密码」：给填写的邮箱发一封带重置链接的邮件。
+   *
+   * 链接回到本站后，Supabase 会用邮件里的 token 换一份**临时会话**
+   * （auth 事件 PASSWORD_RECOVERY / URL 带 type=recovery），本文件据此弹出
+   * 「设置新密码」。所以 redirectTo 必须落在本站，否则落地页无人接管、
+   * 用户点完链接什么也看不到。
+   *
+   * 邮件正文与标题由 Supabase 后台的「重置密码」模板控制，不在前端。
+   */
+  async function sendResetEmail() {
+    var email = (($('authEmail') || {}).value || '').trim();
+    if (!email) return tip('请填写你的邮箱', true);
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return tip('邮箱格式不对', true);
+
+    var btn = $('authSubmit');
+    if (btn) btn.disabled = true;
+    tip('发送中…');
+    try {
+      var r = await client.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + window.location.pathname,
+      });
+      if (r.error) return tip(prettyError(r.error), true);
+      tip('重置邮件已发送到 ' + email + '，请在 1 小时内点击邮件里的链接设置新密码（别忘了垃圾邮件夹）。');
+    } catch (e) {
+      tip('网络异常：' + (e && e.message ? e.message : e), true);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
   async function submitAuth() {
+    // 「忘记密码」态只需要邮箱，密码框是隐藏的
+    if (mode === 'forgot') return sendResetEmail();
+
     var email = ($('authEmail') || {}).value || '';
     var password = ($('authPassword') || {}).value || '';
     if (!email.trim() || !password) return tip('邮箱和密码都得填', true);
-    if (password.length < 8) return tip('密码至少 8 位', true);
-    if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) {
-      return tip('密码要同时包含字母和数字', true);
-    }
+    var pwdBad = passwordProblem(password);
+    if (pwdBad) return tip(pwdBad, true);
 
     var btn = $('authSubmit');
     if (btn) btn.disabled = true;
@@ -398,7 +465,117 @@
     savedForInput = '';
     currentQueryId = null;
     showRecords(false);
+    closePwdModal();
     await refresh();
+  }
+
+  // ---------------------------------------------------------------- 修改密码
+
+  /**
+   * 打开「修改密码」弹层。
+   * @param {'change'|'recover'} [nextMode]
+   *   change  —— 站内已登录改密：必须提供当前密码（防「捡到会话就能改密码」）
+   *   recover —— 重置邮件链接落地：Supabase 已建好临时会话，免验旧密码
+   */
+  function openPwdModal(nextMode) {
+    var m = nextMode === 'recover' ? 'recover' : 'change';
+    // 站内改密的前提是登录态；未登录时不该出现这个入口
+    if (m === 'change' && !currentUser) {
+      openLogin('请先登录后再修改密码。');
+      return;
+    }
+    pwdMode = m;
+    var isRecover = m === 'recover';
+    if ($('pwdTitle')) $('pwdTitle').textContent = isRecover ? '设置新密码' : '修改密码';
+    if ($('pwdNote')) {
+      $('pwdNote').textContent = isRecover
+        ? '你通过邮件里的重置链接进入了改密流程，设置一个新密码即可。'
+        : '先验证当前密码，再设置新密码。';
+    }
+    setDisplay('pwdCurrent', !isRecover, 'block');
+    setDisplay('pwdSubmit', true);
+    setDisplay('pwdTip', true);
+    ['pwdCurrent', 'pwdNew', 'pwdNew2'].forEach(function (id) {
+      var n = $(id);
+      if (n) n.value = '';
+    });
+    var sub = $('pwdSubmit');
+    if (sub) { sub.disabled = false; sub.textContent = isRecover ? '设 置 新 密 码' : '保 存 新 密 码'; }
+    var cls = $('pwdClose');
+    if (cls) cls.textContent = '关闭';
+    pwdTip('');
+    setDisplay('pwdModal', true, 'flex');
+    var focus = isRecover ? $('pwdNew') : $('pwdCurrent');
+    if (focus && focus.focus) focus.focus();
+  }
+  function closePwdModal() {
+    setDisplay('pwdModal', false);
+  }
+
+  /**
+   * 提交改密。
+   *
+   * change 模式下**先验旧密码再改**：Supabase 的 updateUser() 只认会话，
+   * 不校验旧密码——不验就等于「谁拿到会话谁就能改密码」。验的方式是拿
+   * 邮箱 + 当前密码重新 signInWithPassword 一次，失败即中止。
+   */
+  async function submitPwd() {
+    if (!client) return pwdTip('账号功能未启用，暂不能修改密码', true);
+    var isRecover = pwdMode === 'recover';
+    var cur = ($('pwdCurrent') || {}).value || '';
+    var nw = ($('pwdNew') || {}).value || '';
+    var nw2 = ($('pwdNew2') || {}).value || '';
+
+    var bad = passwordProblem(nw);
+    if (bad) return pwdTip(bad, true);
+    if (nw !== nw2) return pwdTip('两次输入的新密码不一致', true);
+
+    var btn = $('pwdSubmit');
+    if (btn) btn.disabled = true;
+    var done = false;
+    try {
+      if (isRecover) {
+        // 重置链接换来的临时会话可能已被用过 / 过期，此时 currentUser 为空
+        if (!currentUser) {
+          return pwdTip('这个重置链接已失效或已被使用。请回到登录框点「忘记密码」重新发送一封邮件。', true);
+        }
+      } else {
+        if (!currentUser) return pwdTip('登录状态已失效，请重新登录后再改密码', true);
+        if (!cur) return pwdTip('请先填写当前密码', true);
+        if (cur === nw) return pwdTip('新密码不能和当前密码一样', true);
+        pwdTip('正在验证当前密码…');
+        var chk = await client.auth.signInWithPassword({
+          email: currentUser.email,
+          password: cur,
+        });
+        if (chk.error) {
+          if (/invalid login credentials/i.test(chk.error.message || '')) {
+            return pwdTip('当前密码不对，请重新输入', true);
+          }
+          return pwdTip(prettyError(chk.error), true);
+        }
+      }
+
+      var upd = await client.auth.updateUser({ password: nw });
+      if (upd.error) return pwdTip(prettyError(upd.error), true);
+
+      // 成功：弹层切成「完成」态而不是直接关掉，否则用户不知道到底改没改成
+      done = true;
+      if ($('pwdTitle')) $('pwdTitle').textContent = '密码已修改';
+      if ($('pwdNote')) $('pwdNote').textContent = '请牢记新密码，下次登录请使用新密码。';
+      setDisplay('pwdCurrent', false);
+      setDisplay('pwdNew', false);
+      setDisplay('pwdNew2', false);
+      setDisplay('pwdSubmit', false);
+      var cls = $('pwdClose');
+      if (cls) cls.textContent = '完成';
+      pwdTip('修改成功。');
+      await refresh();
+    } catch (e) {
+      pwdTip('网络异常：' + (e && e.message ? e.message : e), true);
+    } finally {
+      if (btn && !done) btn.disabled = false;
+    }
   }
 
   // ---------------------------------------------------------------- 查询记录（queries 表）
@@ -748,6 +925,8 @@
     getTier: function () { return currentTier; },
     openUpgradeQr: openQr,
     closeUpgradeQr: closeQr,
+    /** 打开「修改密码」弹层（外部若需触发可用；未登录时会先弹登录框） */
+    openPwdModal: openPwdModal,
     loadQuota: loadQuota,
     refresh: refresh,
     /** 刷新「查询记录」列表 */
@@ -761,6 +940,9 @@
       openLogin();
     });
     if ($('btnLogout')) $('btnLogout').addEventListener('click', signOut);
+    if ($('btnPwd')) $('btnPwd').addEventListener('click', function () {
+      openPwdModal('change');
+    });
     if ($('btnRecords')) $('btnRecords').addEventListener('click', async function () {
       if (recordsOpen()) {
         // 已开着 → 点击收起
@@ -784,8 +966,19 @@
       }
       setMode(mode === 'signin' ? 'signup' : 'signin');
     });
+    if ($('authForgot')) $('authForgot').addEventListener('click', function () {
+      setMode('forgot');
+      tip('');
+    });
     if ($('authClose')) $('authClose').addEventListener('click', closeModal);
+    if ($('pwdSubmit')) $('pwdSubmit').addEventListener('click', submitPwd);
+    if ($('pwdClose')) $('pwdClose').addEventListener('click', closePwdModal);
     if ($('qrClose')) $('qrClose').addEventListener('click', closeQr);
+    if ($('pwdModal')) {
+      $('pwdModal').addEventListener('click', function (e) {
+        if (e.target === $('pwdModal')) closePwdModal();
+      });
+    }
     if ($('qrModal')) {
       $('qrModal').addEventListener('click', function (e) {
         if (e.target === $('qrModal')) closeQr();
@@ -799,6 +992,18 @@
     var pwd = $('authPassword');
     if (pwd) pwd.addEventListener('keydown', function (e) {
       if (e.key === 'Enter') submitAuth();
+    });
+    var mail = $('authEmail');
+    if (mail) mail.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') submitAuth();
+    });
+    // 改密弹层里三个输入框都支持回车提交（当前密码框尤其需要）
+    ['pwdCurrent', 'pwdNew', 'pwdNew2'].forEach(function (id) {
+      var n = $(id);
+      if (!n) return;
+      n.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') submitPwd();
+      });
     });
 
     if (!READY) {
@@ -821,12 +1026,20 @@
 
   if (client) {
     client.auth.onAuthStateChange(function (event, session) {
+      // 「重置密码」邮件链接的落地：Supabase 已用邮件里的 token 换好一份临时会话，
+      // 事件类型是 PASSWORD_RECOVERY（URL 同时带 type=recovery）。
+      // 此刻用户**还没有设新密码**，若照常刷成「已登录」界面，他会在毫不知情的
+      // 情况下变成已登录状态且密码没改掉——所以必须直接弹出「设置新密码」。
+      if (event === 'PASSWORD_RECOVERY') {
+        refresh().then(function () { openPwdModal('recover'); });
+        return;
+      }
       refresh();
     });
 
-    // -------- 验证邮件链接的落地处理 --------
-    // 用户点邮件里的链接后会带着 #access_token=...（已验证）或
-    // #error=access_denied&error_code=otp_expired&...（链接失效）回到本站。
+    // -------- 验证 / 重置邮件链接的落地处理 --------
+    // 用户点邮件里的链接后会带着 #access_token=...（成功）或
+    // #error=access_denied&error_code=otp_expired&...（失效）回到本站。
     // 上面 onAuthStateChange 只管「有 session」，错误分支它完全不触发，
     // 于是用户只看到地址栏里的乱码参数、页面毫无反应——必须显式识别。
     (function handleVerifyCallback() {
@@ -839,16 +1052,27 @@
           if (p[0]) params[decodeURIComponent(p[0])] = decodeURIComponent(p[1] || '');
         });
       }
-      ['error', 'error_code', 'error_description'].forEach(function (k) {
+      // type 同时可能出现在 hash 与 query 里，两边都要看
+      ['error', 'error_code', 'error_description', 'type', 'access_token'].forEach(function (k) {
         var q = new URLSearchParams(window.location.search).get(k);
         if (q && !params[k]) params[k] = q;
       });
 
+      // 「重置密码」链接与「邮箱验证」链接的错误提示完全不同，别混着说
+      var isRecovery = /recovery/i.test(params.type || '');
+
       if (params.error || params.error_code) {
         var msg;
-        if (/otp_expired|expired|invalid/i.test(params.error_code + ' ' + params.error_description)) {
+        var expired = /otp_expired|expired|invalid/i.test(params.error_code + ' ' + params.error_description);
+        if (isRecovery && expired) {
+          msg = '这个重置密码链接已失效或已被使用（有效期 1 小时，且只能用一次）。' +
+            '请回到登录框点「忘记密码」重新发送一封邮件。';
+        } else if (expired) {
           msg = '这个验证链接已失效或已被使用。请回到登录框重新登录，' +
             '登录时若提示邮箱未验证，点「没收到验证邮件？重新发送」即可。';
+        } else if (isRecovery) {
+          msg = '重置密码没有完成（' + (params.error_description || params.error_code || params.error) +
+            '）。请回到登录框点「忘记密码」重新发送邮件。';
         } else {
           msg = '邮箱验证没有完成（' + (params.error_description || params.error_code || params.error) +
             '）。请重新登录并重发验证邮件。';
@@ -864,6 +1088,7 @@
       // 带 access_token 回来 = 验证成功。SDK 已在 detectSessionInUrl 下自动
       // 建立会话，页面会变成已登录界面——这里**不要**再弹任何提示：
       // 用户点链接回来的预期就是「直接进去用」，弹个登录框反而像出错。
+      // （唯一例外是 type=recovery：那不是验证，是改密入口，见下。）
       //
       // 兜底 refresh：SDK 处理 URL 里的 token 是异步的，而本文件的
       // refresh() 在 onAuthStateChange 注册**之前**就调用过一次。极端时序下
@@ -878,6 +1103,10 @@
               try {
                 history.replaceState(null, '', window.location.pathname);
               } catch (e) {}
+              // 改密链接：直接弹「设置新密码」（免验旧密码）。
+              // 与 PASSWORD_RECOVERY 事件互为兜底——谁先到都行，
+              // 弹层是幂等的，重复打开只是重置输入框。
+              if (isRecovery && currentUser) openPwdModal('recover');
               return;
             }
             setTimeout(function () { waitForSession(tries - 1); }, 150);

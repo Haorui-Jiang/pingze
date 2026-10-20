@@ -237,6 +237,8 @@
   .modal .btn { width: 100%; margin-bottom: 12px; letter-spacing: 6px; padding: 12px 20px; }
   .modal-actions { display: flex; gap: 8px; flex-wrap: wrap; }
   .err-tip { color: var(--ze); }
+  /* 弹层顶部的场景说明：紧贴标题，不留上边距（.hint 默认 margin-top:10px） */
+  .modal .modal-note { margin: 0 0 12px; }
 
   /* 查询记录列表 */
   .hist-item {
@@ -320,6 +322,8 @@ var _hmt = _hmt || [];
     <span class="quota" id="quotaInfo"></span>
     <button class="mini-btn" id="btnAuth">登录 / 注册</button>
     <button class="mini-btn" id="btnRecords" style="display:none">查询记录</button>
+    <!-- 修改密码：仅登录态显示（显隐由 auth.js 的 refresh() 统一控制），未登录不出现入口 -->
+    <button class="mini-btn" id="btnPwd" style="display:none">修改密码</button>
     <button class="mini-btn" id="btnLogout" style="display:none">退出</button>
   </div>
 
@@ -421,7 +425,24 @@ var _hmt = _hmt || [];
       <button class="btn" id="authSubmit">登　录</button>
       <div class="modal-actions">
         <button class="mini-btn" id="authSwitch">没有账号？去注册</button>
+        <button class="mini-btn" id="authForgot">忘记密码？</button>
         <button class="mini-btn" id="authClose">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 「修改密码」弹层：登录态改密（需验证当前密码）与重置邮件落地（免验旧密码）共用 -->
+  <div class="modal-mask" id="pwdModal">
+    <div class="modal">
+      <h3 id="pwdTitle">修改密码</h3>
+      <p class="hint modal-note" id="pwdNote">先验证当前密码，再设置新密码。</p>
+      <input id="pwdCurrent" type="password" placeholder="当前密码" autocomplete="current-password">
+      <input id="pwdNew" type="password" placeholder="新密码（至少 8 位，含字母和数字）" autocomplete="new-password">
+      <input id="pwdNew2" type="password" placeholder="再输入一次新密码" autocomplete="new-password">
+      <p class="hint" id="pwdTip"></p>
+      <button class="btn" id="pwdSubmit">保 存 新 密 码</button>
+      <div class="modal-actions">
+        <button class="mini-btn" id="pwdClose">关闭</button>
       </div>
     </div>
   </div>

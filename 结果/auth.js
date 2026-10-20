@@ -118,13 +118,36 @@
     node.className = isError ? 'hint err-tip' : 'hint';
   }
   /**
-   * 密码强度校验（注册 / 登录 / 改密三处共用同一口径，避免三处规则漂移）。
+   * 密码强度校验（注册 + 改密共用同一口径）。
+   *
+   * ★ 口径必须与 Supabase 托管项目一致（2026-10-20 上线前安全审查 P2-3）：
+   *     minimum_password_length = 8、password_requirements = ""（不设形式复杂度）
+   *   详见 supabase/config.toml 同名配置段的注释。
+   *   审查时实测托管项目还是「6 位、无复杂度」，`123456` / `aaaaaaaa` /
+   *   `password123` 都能注册成功 —— 也就是前端严于后端，脚本可绕开前端用弱口令。
+   *
+   * ★★ 刻意**不要求「必须含数字」**（原实现要求字母+数字，本次移除）：
+   *   审查时实测托管项目接受 `古诗韵目` 这种纯中文无数字密码，
+   *   本站用户正是用中文诗词工具的人，纯中文口令是很自然的选择。
+   *   强制「必须含数字」会把他们全部拒之门外，收益却很小 ——
+   *   真正的强度下限交给「8 位长度 + 常见弱口令拦截 + 后端泄露口令库检测」。
+   *   改这条规则前先想清楚：它拦下的是「用中文设密码的本站用户」。
+   *
    * @returns {string} 空串表示通过，否则是给用户看的原因
    */
+  var WEAK_PASSWORDS = [
+    '123456', '12345678', '123456789', '1234567', '11111111', '00000000',
+    'password', 'password1', 'abc12345', 'qwert123', 'admin123', 'iloveyou',
+  ];
   function passwordProblem(pwd) {
     if (!pwd) return '密码不能为空';
-    if (pwd.length < 8) return '密码至少 8 位';
-    if (!/[A-Za-z]/.test(pwd) || !/\d/.test(pwd)) return '密码要同时包含字母和数字';
+    if (String(pwd).length < 8) return '密码至少 8 位';
+    // 连续 6 位以上的同一字符（aaaa1111 / 00000000）—— 形式规则挡不住，靠这里
+    if (/^(.)\1{5,}/.test(String(pwd))) return '密码不能是同一个字符反复重复';
+    var low = String(pwd).toLowerCase();
+    for (var i = 0; i < WEAK_PASSWORDS.length; i++) {
+      if (low === WEAK_PASSWORDS[i]) return '这个密码太常见了，换一个不容易被猜到的';
+    }
     return '';
   }
   function formatTime(iso) {
@@ -477,7 +500,11 @@
     var email = ($('authEmail') || {}).value || '';
     var password = ($('authPassword') || {}).value || '';
     if (!email.trim() || !password) return tip('邮箱和密码都得填', true);
-    var pwdBad = passwordProblem(password);
+    // ★ 只在「注册」时校验强度，**登录时绝不能校验**。
+    //   弱口令规则会拒掉存量用户 —— 他们注册时 6 位无复杂度是合法的，
+    //   现在若登录也拦，等于把他们永久锁在门外（改密也要先验旧密码，进不去）。
+    //   这个坑当年若没注意到，会在上线后表现为「老用户突然全登不上了」。
+    var pwdBad = mode === 'signup' ? passwordProblem(password) : '';
     if (pwdBad) return tip(pwdBad, true);
 
     var btn = $('authSubmit');

@@ -14,9 +14,15 @@
  *   · userbar 的 #btnPwd 仅登录态显示；弹层 pwdMode=change 时先验旧密码再改；
  *   · 登录框 #authForgot 走 resetPasswordForEmail 发重置邮件；
  *   · pwdMode=recover 处理邮件链接落地（PASSWORD_RECOVERY 事件 / URL type=recovery）。
+ *     ★ 此模式下弹层是**锁定的**：Supabase 的 recovery 会话本身就是一个普通登录态，
+ *     不锁住就会出现「密码没改成功、却已经能关窗走人」的白送登录态（2026-10-20 修）。
+ *     只有「新密码真的设成功」或「用户点放弃重置」才解除；pending 标记落 localStorage，
+ *     中途刷新页面仍会被接管（URL 里的 type=recovery 那时已被 SDK 清掉）。
+ *   · 「忘记密码」先调 /api/check-email 判邮箱是否已注册：Supabase 的
+ *     resetPasswordForEmail 对不存在的邮箱也返回成功（防枚举），不自己判就分不出对错。
+ *     该校验是**体验增强不是前置条件**，接口不可用时一律降级为照常发信。
  *   · 改密成功后明确提示确认邮件已发往该邮箱 —— 该邮件由 Supabase 的
- *     **安全通知**模板发出，项目侧默认关闭，须在 Dashboard 手动开启
- *     （见 supabase/config.toml 的 [auth.email.notification.password_changed]）。
+ *     **安全通知**模板发出（`password_changed`），见 supabase/config.toml 同名配置段。
  *
  * 降级原则：只要配置缺失或 CDN 没加载成功，整套登录功能静默关闭，
  * 原有的「匿名查表」链路必须照常可用 —— 不能因为接了账号系统就把站搞挂。
@@ -48,6 +54,25 @@
   //   recover —— 点「重置密码」邮件里的链接回来：Supabase 已用邮件 token 换好
   //              临时会话（auth 事件 PASSWORD_RECOVERY），只需设新密码
   var pwdMode = 'change';
+
+  /**
+   * 「正在通过邮件链接重置密码」的进行中标记。
+   *
+   * ★ 为什么必须显式记这个：Supabase 用邮件 token 换来的 recovery 会话
+   *   **本身就是一个普通登录态**。detectSessionInUrl 一落地，refresh() 就会把
+   *   页面切成「已登录」，于是新密码**还没设成功**、用户就已经是登录态了 ——
+   *   他关掉弹窗就能直接开始用网站，而密码一个字都没改。表现得最明显的场景
+   *   就是本次修复的：用户输入与旧密码相同的值，Supabase 回「不能与原密码
+   *   相同」，错误提示是对的，但只要一关弹窗人就走了，留下一个白送的登录态。
+   *
+   * 所以只要 recovering 为真，弹层就是**锁定的**：不给关闭按钮、点遮罩无效、
+   * 失败后原地重填，只有「新密码真的改成功」或「用户主动放弃」才解除。
+   */
+  var recovering = false;
+  /** pending 标记的键：写进 localStorage，重置途中刷新页面也能续上（URL 里的
+   *  type=recovery 早被 SDK 清掉了，光看 URL 判断不回来）。 */
+  var RECOVER_FLAG = 'pingze_password_recover_pending';
+
   var lastInput = '';
   var lastResult = null;
   // 已经保存过的查询输入；用于防止对同一次查询结果重复入库
@@ -514,6 +539,9 @@
     savedForInput = '';
     currentQueryId = null;
     showRecords(false);
+    // 任何一条登出路径都要清掉「重置进行中」标记：只要用户登出了，
+    // 「必须先设完新密码」的锁定就没有意义了，留着下次打开会误弹。
+    setRecovering(false);
     closePwdModal();
     await refresh();
   }
@@ -524,7 +552,8 @@
    * 打开「修改密码」弹层。
    * @param {'change'|'recover'} [nextMode]
    *   change  —— 站内已登录改密：必须提供当前密码（防「捡到会话就能改密码」）
-   *   recover —— 重置邮件链接落地：Supabase 已建好临时会话，免验旧密码
+   *   recover —— 重置邮件链接落地：Supabase 已建好临时会话，免验旧密码，
+   *              且**锁定弹层**，必须设完新密码（或主动放弃）才能离开
    */
   function openPwdModal(nextMode) {
     var m = nextMode === 'recover' ? 'recover' : 'change';
@@ -535,10 +564,12 @@
     }
     pwdMode = m;
     var isRecover = m === 'recover';
+    if (isRecover) setRecovering(true);
     if ($('pwdTitle')) $('pwdTitle').textContent = isRecover ? '设置新密码' : '修改密码';
     if ($('pwdNote')) {
       $('pwdNote').textContent = isRecover
-        ? '你通过邮件里的重置链接进入了改密流程，设置一个新密码即可（新密码要输入两遍）。'
+        ? '你通过邮件里的重置链接进入了改密流程，新密码要输入两遍。' +
+          '设置成功之前无法关闭本窗口 —— 否则密码没改、却留下一个已登录状态。'
         : '先验证原密码，再设置新密码（新密码要输入两遍）。';
     }
     setDisplay('pwdCurrent', !isRecover, 'block');
@@ -551,7 +582,8 @@
     var sub = $('pwdSubmit');
     if (sub) { sub.disabled = false; sub.textContent = isRecover ? '设 置 新 密 码' : '保 存 新 密 码'; }
     var cls = $('pwdClose');
-    if (cls) cls.textContent = '关闭';
+    // 重置流程进行中：唯一的出口是「放弃重置」，不是「关闭」
+    if (cls) cls.textContent = isRecover ? '放弃重置，用原密码登录' : '关闭';
     pwdTip('');
     setDisplay('pwdModal', true, 'flex');
     var focus = isRecover ? $('pwdNew') : $('pwdCurrent');
@@ -559,6 +591,39 @@
   }
   function closePwdModal() {
     setDisplay('pwdModal', false);
+  }
+
+  /** 置位/清除「重置进行中」标记，同时落一份到 localStorage 供刷新后续上 */
+  function setRecovering(on) {
+    recovering = !!on;
+    try {
+      if (recovering) window.localStorage.setItem(RECOVER_FLAG, '1');
+      else window.localStorage.removeItem(RECOVER_FLAG);
+    } catch (e) {
+      /* 隐私模式 / 禁用存储时不可用；此时仅靠内存标记，功能仍可用 */
+    }
+  }
+  function readRecoverFlag() {
+    try {
+      return window.localStorage.getItem(RECOVER_FLAG) === '1';
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /**
+   * 用户主动放弃重置。
+   *
+   * 出口是必需的：recovery 会话有有效期，万一过期后弹层关不掉，用户就被困住了。
+   * 放弃 = 清标记 + 退出这个 recovery 会话 + 回到登录框（原来的密码仍然有效）。
+   */
+  function abandonRecovery() {
+    setRecovering(false);
+    closePwdModal();
+    var done = signOut();
+    if (done && typeof done.then === 'function') {
+      done.then(function () { openLogin('已放弃本次密码重置，你的原密码仍然有效。'); });
+    }
   }
 
   /**
@@ -584,9 +649,12 @@
     var done = false;
     try {
       if (isRecover) {
-        // 重置链接换来的临时会话可能已被用过 / 过期，此时 currentUser 为空
+        // 重置链接换来的临时会话可能已被用过 / 过期，此时 currentUser 为空。
+        // 这条路已经走不通了，清掉 pending 标记，避免下次打开页面还弹出改密框。
         if (!currentUser) {
-          return pwdTip('这个重置链接已失效或已被使用。请回到登录框点「忘记密码」重新发送一封邮件。', true);
+          setRecovering(false);
+          return pwdTip('这个重置链接已失效或已被使用。请点「放弃重置」回到登录框，' +
+            '再用「忘记密码」重新发送一封邮件。', true);
         }
       } else {
         if (!currentUser) return pwdTip('登录状态已失效，请重新登录后再改密码', true);
@@ -606,10 +674,15 @@
       }
 
       var upd = await client.auth.updateUser({ password: nw });
+      // ★ 失败（含「不能与原密码相同」）时这里直接 return：
+      //   弹层保持打开、recovering 保持为真 ⇒ 用户仍被锁在重置流程里，
+      //   不能关窗走人，也不会看到一个「密码没改但已登录」的界面。
       if (upd.error) return pwdTip(prettyError(upd.error), true);
 
-      // 成功：弹层切成「完成」态而不是直接关掉，否则用户不知道到底改没改成
+      // 成功：解除锁定 + 弹层切成「完成」态而不是直接关掉，
+      // 否则用户不知道到底改没改成
       done = true;
+      setRecovering(false);
       var mailTo = (currentUser && currentUser.email) || '';
       if ($('pwdTitle')) $('pwdTitle').textContent = '密码已修改';
       if ($('pwdNote')) $('pwdNote').textContent = '请牢记新密码，下次登录请使用新密码。';
@@ -1027,11 +1100,20 @@
     });
     if ($('authClose')) $('authClose').addEventListener('click', closeModal);
     if ($('pwdSubmit')) $('pwdSubmit').addEventListener('click', submitPwd);
-    if ($('pwdClose')) $('pwdClose').addEventListener('click', closePwdModal);
+    if ($('pwdClose')) {
+      $('pwdClose').addEventListener('click', function () {
+        // 重置流程进行中：这不是「关闭」，是「放弃重置」（退出会话、回到登录框）
+        if (pwdMode === 'recover' && recovering) { abandonRecovery(); return; }
+        closePwdModal();
+      });
+    }
     if ($('qrClose')) $('qrClose').addEventListener('click', closeQr);
     if ($('pwdModal')) {
       $('pwdModal').addEventListener('click', function (e) {
-        if (e.target === $('pwdModal')) closePwdModal();
+        if (e.target !== $('pwdModal')) return;
+        // 锁定期间点遮罩**不能**关窗：密码还没改成功就放人走 = 白送一个登录态
+        if (pwdMode === 'recover' && recovering) return;
+        closePwdModal();
       });
     }
     if ($('qrModal')) {
@@ -1073,10 +1155,32 @@
     document.addEventListener('DOMContentLoaded', function () {
       wire();
       refresh();
+      resumeRecoveryIfPending();
     });
   } else {
     wire();
     refresh();
+    resumeRecoveryIfPending();
+  }
+
+  /**
+   * 重置途中刷新页面后的接管。
+   *
+   * 邮件链接被 SDK 处理完就把 URL 清干净了，`type=recovery` 已经读不到，
+   * 但「密码还没设成功」这件事记在 localStorage 里 —— 否则用户刷新一下就
+   * 变成一个普通已登录页面，密码没改却畅通无阻（和本次修的 bug 同一个洞）。
+   */
+  function resumeRecoveryIfPending() {
+    if (!client || !readRecoverFlag()) return;
+    client.auth.getSession().then(function (r) {
+      var s = r && r.data && r.data.session;
+      if (s && s.user) {
+        refresh().then(function () { openPwdModal('recover'); });
+      } else {
+        // 会话没了（过期 / 被登出）→ 标记是脏的，清掉别再弹
+        setRecovering(false);
+      }
+    }).catch(function () { setRecovering(false); });
   }
 
   if (client) {
@@ -1084,9 +1188,18 @@
       // 「重置密码」邮件链接的落地：Supabase 已用邮件里的 token 换好一份临时会话，
       // 事件类型是 PASSWORD_RECOVERY（URL 同时带 type=recovery）。
       // 此刻用户**还没有设新密码**，若照常刷成「已登录」界面，他会在毫不知情的
-      // 情况下变成已登录状态且密码没改掉——所以必须直接弹出「设置新密码」。
+      // 情况下变成已登录状态且密码没改掉——所以必须直接弹出「设置新密码」，
+      // 并把弹层锁住直到新密码真的设成功（见 recovering）。
       if (event === 'PASSWORD_RECOVERY') {
         refresh().then(function () { openPwdModal('recover'); });
+        return;
+      }
+      // 锁定期间会话被作废（重置链接过期 / 被登出）：锁定已无意义，
+      // 主动解除并说明原因，否则用户会被困在一个点不掉的弹层里。
+      if (event === 'SIGNED_OUT' && recovering) {
+        setRecovering(false);
+        closePwdModal();
+        openLogin('登录状态已失效（重置链接可能已过期），请重新登录，或用「忘记密码」再发一封重置邮件。');
         return;
       }
       refresh();

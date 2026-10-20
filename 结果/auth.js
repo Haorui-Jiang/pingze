@@ -86,8 +86,12 @@
    *  查表功能本身永久免费、不计次。 */
   var DAILY_QUOTA = 10;
 
-  /** AI 赏析类型 → 中文标签（与后端 lib/ai-insight.js 的 TYPES 白名单一致） */
-  var AI_KIND_LABEL = { analysis: 'AI 平仄分析', appreciation: 'AI 诗词鉴赏' };
+  /** AI 赏析类型 → 中文标签（与后端 lib/ai-insight.js 的 TYPES 白名单、
+   *  DB 里 query_insights.kind 的 check 约束一致；三方漏改一处就是静默失效） */
+  var AI_KIND_LABEL = { analysis: 'AI 平仄分析', appreciation: 'AI 诗词鉴赏', translation: 'AI 白话译文' };
+
+  /** 入库白名单：与 AI_KIND_LABEL 同 key 集，显式列出以便一眼看出新增能力是否漏登记 */
+  var AI_KINDS = Object.keys(AI_KIND_LABEL);
 
   /** content 列上限，与迁移 20261016094246 的 check 约束一致 */
   var AI_CONTENT_MAX = 8000;
@@ -830,7 +834,7 @@
    */
   async function onAiDone(kind, content, model) {
     if (!READY || !currentUser) return null;
-    if (kind !== 'analysis' && kind !== 'appreciation') return null;
+    if (AI_KINDS.indexOf(kind) < 0) return null;
     var text = String(content == null ? '' : content).trim();
     if (!text) return null;
 
@@ -864,7 +868,7 @@
    * 读这些查询记录各自最新的一条 AI 赏析内容，按 query_id 归并成 Map。
    * 单独一次 in(...) 查询即可，不做逐条 N+1。
    * @param {Array<{id:string}>} rows 查询记录
-   * @returns {Promise<Object<string, {analysis?:object, appreciation?:object}>>}
+   * @returns {Promise<Object<string, Object<string, object>>>} 形如 {queryId: {analysis:row, appreciation:row, translation:row}}
    */
   async function loadInsightsFor(rows) {
     var map = {};
@@ -890,18 +894,26 @@
     return map;
   }
 
-  /** 记录卡片里折叠展示的 AI 内容块 */
+  /** 记录卡片里折叠展示的 AI 内容块（按登记顺序：分析 → 鉴赏 → 译文） */
   function aiBlocksHtml(bucket) {
     if (!bucket) return '';
-    var order = ['analysis', 'appreciation'];
     var html = '';
-    order.forEach(function (kind) {
+    AI_KINDS.forEach(function (kind) {
       var it = bucket[kind];
       if (!it || !it.content) return;
       html += '<details class="hist-ai"><summary>' + AI_KIND_LABEL[kind] + '</summary>' +
         '<pre class="hist-ai-body">' + escapeHtml(it.content) + '</pre></details>';
     });
     return html;
+  }
+
+  /** 该查询是否带任何一种 AI 内容（决定是否挂「含 AI 赏析」角标） */
+  function hasAnyAi(bucket) {
+    if (!bucket) return false;
+    for (var i = 0; i < AI_KINDS.length; i++) {
+      if (bucket[AI_KINDS[i]]) return true;
+    }
+    return false;
   }
 
   async function loadRecords() {
@@ -950,7 +962,7 @@
       // 显示全部输入文本（不截断、不折叠换行）
       var preview = String(r.input_text || '');
       var bucket = insightMap[r.id];
-      var hasAi = !!(bucket && (bucket.analysis || bucket.appreciation));
+      var hasAi = hasAnyAi(bucket);
       html += '<div class="hist-item" data-id="' + r.id + '">' +
         '<div class="hist-meta">' + formatTime(r.created_at) +
         (hasAi ? '<span class="hist-ai-flag">含 AI 赏析</span>' : '') + '</div>' +
@@ -983,11 +995,13 @@
           window.PingzeAuth.onQueryDone(row.input_text || '', row.result, row.id);
         }
         // AI 内容回放：只填文本，不代用户勾开关（回放态开关已锁定，用户无法自行打开）
+        // map 的 key 必须与 index.html AI_KINDS[].type 一致（analysis/appreciation/translation）
         if (window.showAiRecord) {
-          window.showAiRecord({
-            analysis: bucket && bucket.analysis ? bucket.analysis.content : '',
-            appreciation: bucket && bucket.appreciation ? bucket.appreciation.content : '',
+          var aiMap = {};
+          AI_KINDS.forEach(function (k) {
+            aiMap[k] = bucket && bucket[k] ? bucket[k].content : '';
           });
+          window.showAiRecord(aiMap);
         }
         window.scrollTo({ top: 0, behavior: 'smooth' });
       });

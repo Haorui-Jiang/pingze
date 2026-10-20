@@ -400,6 +400,11 @@ var _hmt = _hmt || [];
         <button class="mini-btn" id="btnAiAppreciation" disabled onclick="generateAi('appreciation')">生成诗词鉴赏</button>
       </div>
       <pre class="ai-out" id="aiOutAppreciation"></pre>
+      <div class="ai-row">
+        <label class="switch"><input type="checkbox" id="swTranslation"><i></i><span>诗词翻译</span></label>
+        <button class="mini-btn" id="btnAiTranslation" disabled onclick="generateAi('translation')">生成白话译文</button>
+      </div>
+      <pre class="ai-out" id="aiOutTranslation"></pre>
       <p class="hint">免费每日 3 次、会员每日 10 次；AI 仅依据上方查表结果做分析，不会自行改判平仄。登录后生成的内容会自动存入「查询记录」，可随时回看。</p>
       <p class="hint ai-locked-tip" id="aiLockedTip"></p>
     </div>
@@ -439,8 +444,9 @@ var _hmt = _hmt || [];
         <a href="/pingshui-yun">平水韵查询 · 106 韵韵部对照表</a>。
       </p>
       <p>
-        查询完成后，还可以按需开启 <b>AI 平仄分析</b>与<b>诗词鉴赏</b>（默认关闭，仅勾选后才调用）：
-        AI 只依据上面的查表结果做判断与阐释，不会自行改判平仄。
+        查询完成后，还可以按需开启 <b>AI 平仄分析</b>、<b>诗词鉴赏</b>与<b>诗词翻译</b>
+        （默认关闭，仅勾选后才调用）：AI 只依据上面的查表结果做判断与阐释，
+        不会自行改判平仄；翻译则输出逐句白话译文与疑难字词注释。
       </p>
       <p>
         如果你还在比较格律检测哪个好用、诗词格律软件哪个好用，不妨先把本页加入收藏：
@@ -649,6 +655,28 @@ function copyResult() {
 }
 
 /**
+ * AI 赏析三种能力的唯一登记表。
+ * ★ 以前这里散着四份平行数组（setAiLocked / resetAi / wireAiSwitches / showAiRecord），
+ *   每份都靠下标一一对应 —— 加一个能力必须记得改四处，漏一处就是
+ *   「开关能点但按钮不亮」这类静默故障。故收敛成这一份，其余地方一律遍历它。
+ * ★ kind 取值必须与后端 lib/ai-insight.js 的 TYPES 白名单、
+ *   auth.js 的 AI_KIND_LABEL、DB 里 query_insights.kind 的 check 约束一致。
+ */
+var AI_KINDS = [
+  { type: 'analysis',     sw: 'swAnalysis',     btn: 'btnAiAnalysis',     out: 'aiOutAnalysis',     label: '生成平仄分析' },
+  { type: 'appreciation', sw: 'swAppreciation', btn: 'btnAiAppreciation', out: 'aiOutAppreciation', label: '生成诗词鉴赏' },
+  { type: 'translation',  sw: 'swTranslation',  btn: 'btnAiTranslation',  out: 'aiOutTranslation',  label: '生成白话译文' },
+];
+
+/** 按 type 取登记表项（防止外部传进未登记的 type） */
+function aiKindCfg(type) {
+  for (var i = 0; i < AI_KINDS.length; i++) {
+    if (AI_KINDS[i].type === type) return AI_KINDS[i];
+  }
+  return null;
+}
+
+/**
  * AI 赏析块是否处于「查询记录回放态」。
  * 回放的是**已存过的记录**，AI 赏析内容已经跟着记录一起回显了；再开开关重新生成
  * 只会对同一条诗重复扣额度、且大概率得到几乎一样的结果。故锁定开关（置灰）。
@@ -670,9 +698,9 @@ function setAiLocked(locked, reason) {
       : '';
   }
 
-  [['swAnalysis', 'btnAiAnalysis'], ['swAppreciation', 'btnAiAppreciation']].forEach(function (t) {
-    var sw = document.getElementById(t[0]);
-    var btn = document.getElementById(t[1]);
+  AI_KINDS.forEach(function (k) {
+    var sw = document.getElementById(k.sw);
+    var btn = document.getElementById(k.btn);
     // 锁定时把已勾选的开关强制取消，并禁用；按钮一并禁用，避免出现「开关关了但按钮可点」
     if (sw) { sw.disabled = aiLocked; if (aiLocked) sw.checked = false; }
     if (btn && aiLocked) btn.disabled = true;
@@ -680,19 +708,18 @@ function setAiLocked(locked, reason) {
 }
 
 /**
- * AI 赏析块重置：两个开关关闭、按钮禁用、输出清空。
+ * AI 赏析块重置：所有开关关闭、按钮禁用、输出清空、按钮文案复位。
  * 新查询（analyze）走这里时必须顺带解锁 —— 否则用户在回放态下重新查一次，
  * 开关会一直是灰的，看着像坏了。
  */
 function resetAi() {
   setAiLocked(false);
-  [['swAnalysis', 'btnAiAnalysis', 'aiOutAnalysis'],
-   ['swAppreciation', 'btnAiAppreciation', 'aiOutAppreciation']].forEach(function (t) {
-    var sw = document.getElementById(t[0]);
-    var btn = document.getElementById(t[1]);
-    var out = document.getElementById(t[2]);
+  AI_KINDS.forEach(function (k) {
+    var sw = document.getElementById(k.sw);
+    var btn = document.getElementById(k.btn);
+    var out = document.getElementById(k.out);
     if (sw) sw.checked = false;
-    if (btn) { btn.disabled = true; btn.textContent = t[1] === 'btnAiAnalysis' ? '生成平仄分析' : '生成诗词鉴赏'; }
+    if (btn) { btn.disabled = true; btn.textContent = k.label; }
     if (out) { out.style.display = 'none'; out.textContent = ''; }
   });
 }
@@ -703,11 +730,10 @@ window.isAiLocked = function () { return aiLocked; };
 window.lockAiForReplay = function (reason) { setAiLocked(true, reason); };
 
 function wireAiSwitches() {
-  [['swAnalysis', 'btnAiAnalysis', 'aiOutAnalysis'],
-   ['swAppreciation', 'btnAiAppreciation', 'aiOutAppreciation']].forEach(function (t) {
-    var sw = document.getElementById(t[0]);
-    var btn = document.getElementById(t[1]);
-    var out = document.getElementById(t[2]);
+  AI_KINDS.forEach(function (k) {
+    var sw = document.getElementById(k.sw);
+    var btn = document.getElementById(k.btn);
+    var out = document.getElementById(k.out);
     if (sw && btn) sw.addEventListener('change', function () {
       btn.disabled = !sw.checked;
       if (!sw.checked && out) { out.style.display = 'none'; out.textContent = ''; }
@@ -718,15 +744,15 @@ function wireAiSwitches() {
 /**
  * 把查询记录里存着的 AI 赏析内容回填到结果区（由 auth.js 记录回放时调用）。
  * 只填文本，不代用户勾开关 —— 开关仍可自行打开重新生成。
- * 注意必须在 render() 之后调用：render 里的 resetAi() 会清空这两个输出块。
+ * 注意必须在 render() 之后调用：render 里的 resetAi() 会清空这些输出块。
  */
 function showAiRecord(map) {
-  [['aiOutAnalysis', map && map.analysis],
-   ['aiOutAppreciation', map && map.appreciation]].forEach(function (t) {
-    var out = document.getElementById(t[0]);
+  AI_KINDS.forEach(function (k) {
+    var out = document.getElementById(k.out);
     if (!out) return;
-    if (t[1]) {
-      out.textContent = t[1];
+    var content = map && map[k.type];
+    if (content) {
+      out.textContent = content;
       out.style.display = 'block';
     }
   });
@@ -734,14 +760,16 @@ function showAiRecord(map) {
 window.showAiRecord = showAiRecord;
 
 /**
- * 生成 AI 赏析（平仄分析 / 诗词鉴赏）。
+ * 生成 AI 赏析（平仄分析 / 诗词鉴赏 / 白话翻译）。
  * 防浪费设计：只有勾选开关才会走到这里；未登录先弹登录框（不发请求）；
  * 401 → 重新弹登录；429 → 弹会员二维码；任何失败都不影响已显示的查表结果。
  */
 async function generateAi(type) {
-  var sw = document.getElementById(type === 'analysis' ? 'swAnalysis' : 'swAppreciation');
-  var btn = document.getElementById(type === 'analysis' ? 'btnAiAnalysis' : 'btnAiAppreciation');
-  var out = document.getElementById(type === 'analysis' ? 'aiOutAnalysis' : 'aiOutAppreciation');
+  var cfg = aiKindCfg(type);
+  if (!cfg) return;
+  var sw = document.getElementById(cfg.sw);
+  var btn = document.getElementById(cfg.btn);
+  var out = document.getElementById(cfg.out);
   if (!sw || !sw.checked || !btn || !out) return;
   if (!lastRes || !lastRes.ok) return;
   if (btn.disabled) return;
@@ -790,7 +818,7 @@ async function generateAi(type) {
       if (r.status === 429) {
         var wait = Number(data.retryAfterSec) || 30;
         out.textContent += '\n请约 ' + wait + ' 秒后再试（平仄与韵部查询不受影响）。';
-        var cool = function () { setTimeout(function () { runAi(type); }, wait * 1000); };
+        var cool = function () { setTimeout(function () { generateAi(type); }, wait * 1000); };
         // 冷却后再试一次；仍失败则把按钮交还给用户，避免无限自动重试。
         cool();
       }

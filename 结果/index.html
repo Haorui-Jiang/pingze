@@ -205,6 +205,13 @@
   .switch input:checked + i::after { left: 19.5px; }
   .mini-btn:disabled { opacity: .5; cursor: not-allowed; }
 
+  /* 查询记录回放态：AI 开关锁定，禁止对同一条记录重复分析（每次都要扣额度） */
+  .ai-block.ai-locked .switch { opacity: .45; cursor: not-allowed; }
+  .ai-block.ai-locked .switch i { background: #cdc4b4; }
+  .ai-block.ai-locked .switch i::after { left: 2.5px; background: #fffdf8; }
+  .ai-locked-tip { display: none; }
+  .ai-block.ai-locked .ai-locked-tip { display: block; }
+
   .copy-bar { display: flex; gap: 10px; align-items: center; margin-top: 16px; flex-wrap: wrap; }
   .copy-bar textarea {
     flex: 1; min-height: 38px; font-size: 13px; font-family: monospace;
@@ -394,6 +401,7 @@ var _hmt = _hmt || [];
       </div>
       <pre class="ai-out" id="aiOutAppreciation"></pre>
       <p class="hint">免费每日 3 次、会员每日 10 次；AI 仅依据上方查表结果做分析，不会自行改判平仄。登录后生成的内容会自动存入「查询记录」，可随时回看。</p>
+      <p class="hint ai-locked-tip" id="aiLockedTip"></p>
     </div>
 
     <div class="copy-bar">
@@ -559,8 +567,14 @@ function esc(s) {
   return String(s).replace(/[&<>"']/g, m => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
 }
 
-/** 渲染查表结果；查询记录回放时也走这里（window.renderResult） */
-function render(res) {
+/**
+ * 渲染查表结果；查询记录回放时也走这里（window.renderResult）。
+ * @param {object} res
+ * @param {object} [opts]
+ * @param {boolean} [opts.replay] true = 回放「查询记录」里的旧记录
+ *        （AI 赏析内容已随记录回显，开关锁定防重复分析；新查询不传，自动解锁）
+ */
+function render(res, opts) {
   if (!res || !res.ok) {
     showError('这条记录没有可显示的查询结果（可能保存时数据不完整）。');
     return;
@@ -601,8 +615,10 @@ function render(res) {
   });
   document.getElementById('pzGrid').innerHTML = gridHtml;
 
-  // AI 赏析块：每次新查询都重置为「全关 + 无输出」
+  // AI 赏析块：先重置为「全关 + 无输出」（resetAi 内含解锁），
+  // 若是「查询记录」回放则紧接着上锁 —— 顺序不能反，否则会被 resetAi 解掉。
   resetAi();
+  if (opts && opts.replay) setAiLocked(true);
 
   // 复制文本
   document.getElementById('copyText').value = buildCopy(res);
@@ -632,8 +648,44 @@ function copyResult() {
   });
 }
 
-/** AI 赏析块重置：两个开关关闭、按钮禁用、输出清空 */
+/**
+ * AI 赏析块是否处于「查询记录回放态」。
+ * 回放的是**已存过的记录**，AI 赏析内容已经跟着记录一起回显了；再开开关重新生成
+ * 只会对同一条诗重复扣额度、且大概率得到几乎一样的结果。故锁定开关（置灰）。
+ */
+var aiLocked = false;
+
+/** 锁定/解锁 AI 开关。reason 为锁定原因（显示给用户），解锁时传空 */
+function setAiLocked(locked, reason) {
+  aiLocked = !!locked;
+  var block = document.querySelector('.ai-block');
+  var tip = document.getElementById('aiLockedTip');
+  if (block) block.classList.toggle('ai-locked', aiLocked);
+  if (tip) {
+    // ★ 文案里不要出现「重复分析 / 会再扣额度」之类的说法：锁定后重复分析这条路
+    //   本来就不存在了，再解释「无需重复」等于凭空造一个用户没提过的概念，
+    //   反而让人以为还有别的入口。只说清「这是旧记录」和「怎么重新开启」。
+    tip.textContent = aiLocked
+      ? (reason || '当前展示的是「查询记录」里的旧记录。若要重新分析，点上方「查　询」重新查询后再开启开关。')
+      : '';
+  }
+
+  [['swAnalysis', 'btnAiAnalysis'], ['swAppreciation', 'btnAiAppreciation']].forEach(function (t) {
+    var sw = document.getElementById(t[0]);
+    var btn = document.getElementById(t[1]);
+    // 锁定时把已勾选的开关强制取消，并禁用；按钮一并禁用，避免出现「开关关了但按钮可点」
+    if (sw) { sw.disabled = aiLocked; if (aiLocked) sw.checked = false; }
+    if (btn && aiLocked) btn.disabled = true;
+  });
+}
+
+/**
+ * AI 赏析块重置：两个开关关闭、按钮禁用、输出清空。
+ * 新查询（analyze）走这里时必须顺带解锁 —— 否则用户在回放态下重新查一次，
+ * 开关会一直是灰的，看着像坏了。
+ */
 function resetAi() {
+  setAiLocked(false);
   [['swAnalysis', 'btnAiAnalysis', 'aiOutAnalysis'],
    ['swAppreciation', 'btnAiAppreciation', 'aiOutAppreciation']].forEach(function (t) {
     var sw = document.getElementById(t[0]);
@@ -644,6 +696,11 @@ function resetAi() {
     if (out) { out.style.display = 'none'; out.textContent = ''; }
   });
 }
+
+/** 是否处于回放锁定态（供 generateAi 二次兜底） */
+window.isAiLocked = function () { return aiLocked; };
+/** 供 auth.js 在回放查询记录时调用 */
+window.lockAiForReplay = function (reason) { setAiLocked(true, reason); };
 
 function wireAiSwitches() {
   [['swAnalysis', 'btnAiAnalysis', 'aiOutAnalysis'],
@@ -688,6 +745,9 @@ async function generateAi(type) {
   if (!sw || !sw.checked || !btn || !out) return;
   if (!lastRes || !lastRes.ok) return;
   if (btn.disabled) return;
+  // 回放锁定态的兜底：开关与按钮在 UI 上已禁用，这里再挡一次。
+  // 防的是「UI 已锁但仍有路径能调进来」——例如控制台直接调用本函数。
+  if (window.isAiLocked && window.isAiLocked()) return;
 
   // 未登录：本地就先拦下，省一次注定 401 的请求
   if (window.PingzeAuth && !window.PingzeAuth.getUser()) {

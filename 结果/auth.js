@@ -974,13 +974,15 @@
       if (textNode) textNode.addEventListener('click', function () {
         var ta = $('poem');
         if (ta) ta.value = row.input_text || '';
-        if (window.renderResult) window.renderResult(row.result);
+        // replay:true —— 回放的是已存记录，AI 赏析内容随记录一起回显，
+        // 开关会置灰锁定，防止对同一条诗重复生成（重复扣额度、结果也几乎一样）
+        if (window.renderResult) window.renderResult(row.result, { replay: true });
         // 告诉账号系统「当前就是这条记录」：后续 AI 生成会挂回这一条，
         // 不会在库里重复插一条同名查询
         if (window.PingzeAuth) {
           window.PingzeAuth.onQueryDone(row.input_text || '', row.result, row.id);
         }
-        // AI 内容回放：只填文本，不代用户勾开关（开关仍可自行打开重新生成）
+        // AI 内容回放：只填文本，不代用户勾开关（回放态开关已锁定，用户无法自行打开）
         if (window.showAiRecord) {
           window.showAiRecord({
             analysis: bucket && bucket.analysis ? bucket.analysis.content : '',

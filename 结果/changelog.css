@@ -1,0 +1,69 @@
+/* 结果/changelog.css —— 「更新日志」弹层样式
+ * 首页与 /pingshui-yun 共用这一份（两页各自 <link> 引入），避免样式各写一份后漂移。
+ * 颜色沿用站点 CSS 变量，缺变量的页面用 fallback，弹层不依赖页面自身的组件类。
+ */
+.cl-entry {
+  color: var(--seal, #9e2f2f); text-decoration: none; cursor: pointer;
+  border-bottom: 1px dashed var(--seal-soft, #c0564f);
+}
+.cl-entry:hover { background: rgba(192, 86, 79, 0.10); }
+/* 有未读更新时入口右侧的小红点（看过一次即消失） */
+.cl-entry.has-new::after {
+  content: ""; display: inline-block; width: 7px; height: 7px;
+  margin-left: 5px; border-radius: 50%;
+  background: var(--seal, #9e2f2f); vertical-align: middle;
+}
+
+.cl-mask {
+  position: fixed; top: 0; right: 0; bottom: 0; left: 0;
+  background: rgba(35, 34, 31, 0.45); display: none;
+  align-items: center; justify-content: center;
+  /* 高于账号 / 二维码弹层（层级 50），自动弹出时不会被压住 */
+  z-index: 80; padding: 16px;
+}
+.cl-mask.is-open { display: flex; }
+
+.cl-modal {
+  width: 100%; max-width: 560px; max-height: 82vh; overflow-y: auto;
+  background: #fffdf8; border: 1px solid var(--line, #d8cdb8);
+  border-radius: 14px; box-shadow: 0 18px 50px rgba(60, 45, 30, 0.28);
+  padding: 22px 26px;
+}
+.cl-modal h3 {
+  margin: 0 0 6px; font-size: 19px; letter-spacing: 3px;
+  color: var(--seal, #9e2f2f); font-weight: 600;
+}
+.cl-sub { margin: 0 0 18px; font-size: 12.5px; color: var(--ink-soft, #5a534b); letter-spacing: 1px; }
+.cl-list { list-style: none; margin: 0; padding: 0; }
+.cl-item {
+  border-left: 2px solid var(--line, #d8cdb8);
+  padding: 2px 0 2px 14px; margin-bottom: 18px;
+}
+.cl-item.is-latest { border-left-color: var(--seal, #9e2f2f); }
+.cl-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cl-date {
+  font-family: monospace; font-size: 13px; letter-spacing: 1px;
+  color: var(--gold, #b08d3e);
+}
+.cl-tag {
+  font-size: 11.5px; letter-spacing: 1px; color: #fff;
+  background: var(--seal, #9e2f2f); border-radius: 999px; padding: 1px 9px;
+}
+.cl-title { font-size: 15.5px; font-weight: 600; color: var(--ink, #2b2b2b); margin: 4px 0 6px; }
+.cl-items { margin: 0; padding-left: 20px; }
+.cl-items li {
+  font-size: 14px; line-height: 1.9; color: var(--ink-soft, #5a534b);
+  list-style: disc;
+}
+.cl-actions { text-align: center; margin-top: 6px; }
+.cl-close {
+  font-family: inherit; font-size: 14px; letter-spacing: 2px; cursor: pointer;
+  border: 1px solid var(--seal-soft, #c0564f); border-radius: 8px;
+  background: #fffdf8; color: var(--seal, #9e2f2f); padding: 8px 30px;
+}
+.cl-close:hover { background: rgba(192, 86, 79, 0.10); }
+
+@media (max-width: 600px) {
+  .cl-modal { padding: 18px 18px; max-height: 86vh; }
+  .cl-items li { font-size: 13.5px; }
+}

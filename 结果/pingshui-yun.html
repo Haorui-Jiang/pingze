@@ -214,6 +214,8 @@
     .ch-card { max-width: 100%; }
   }
 </style>
+<!-- 更新日志弹层样式：与首页共用同一份，改一处即全站生效 -->
+<link rel="stylesheet" href="changelog.css">
 <!-- 百度统计 -->
 <script>
 var _hmt = _hmt || [];
@@ -328,11 +330,27 @@ var _hmt = _hmt || [];
     二楼简体版（《增广诗韵集成》增补修订版，韵目 106 个）<br>
     本站仅作字形与韵部对照的整理展示，原帖保留全部权利；如有讹误欢迎反馈修订<br>
     <a href="https://github.com/Haorui-Jiang/pingze" target="_blank" rel="noopener">开源代码（GitHub）</a>
+    ·
+    <a href="#changelog" class="cl-entry" id="changelogLink">更新日志</a>
   </footer>
 
 </div>
 
+<!-- 更新日志弹层：内容与自动弹出逻辑在 changelog.js（与首页同构） -->
+<div class="cl-mask" id="clModal" role="dialog" aria-modal="true" aria-labelledby="clTitle">
+  <div class="cl-modal">
+    <h3 id="clTitle">更新日志</h3>
+    <p class="cl-sub" id="clSub"></p>
+    <ul class="cl-list" id="clList"></ul>
+    <div class="cl-actions">
+      <button type="button" class="cl-close" id="clClose">知道了</button>
+    </div>
+  </div>
+</div>
+
 <script src="pingshui-yun-data.js"></script>
+<!-- 更新日志：必须在页面内联逻辑之前加载，由内联逻辑末尾调用 init() -->
+<script src="changelog.js"></script>
 <script>
 (function () {
   'use strict';
@@ -577,6 +595,9 @@ var _hmt = _hmt || [];
 
   renderList();
   applyHash();
+
+  // 更新日志：与首页共用已读状态，任一页看过就不再自动弹
+  if (window.PingzeChangelog) window.PingzeChangelog.init();
 })();
 </script>
 </body>

@@ -135,6 +135,20 @@
 - **SEO ready**: both public pages (`/` and `/pingshui-yun`) carry title / description / keywords / OG tags and
   Baidu Analytics; `tools/gen-sitemap.js` regenerates the sitemap.
 
+### 6. Changelog
+
+- **Entry and modal**: the footer of both the home page and `/pingshui-yun` has a Changelog link; the modal
+  lists every release (newest first) with its date and details. An unread release shows a red dot on the entry.
+- **Auto-open on the next visit after a release**: `CHANGELOG` in `结果/changelog.js` is the single source of
+  truth, with `LATEST_VERSION` taken from its first entry. The version the user has seen is kept in
+  `localStorage`; when it differs from the current one, the modal opens as soon as the site loads — **once per
+  release**. Both pages share the same key, so reading it on one page suppresses the other.
+- **How to publish an update**: prepend one entry to `CHANGELOG` (a **new** `version`, a `YYYY-MM-DD` `date`,
+  a `title` and `items`) and deploy — no other code changes are needed. Password-recovery landing pages skip
+  the auto-open so the change-password modal is never covered.
+- **Regression**: `node tools/verify-changelog.js` checks the data contract, both pages' wiring, and the
+  auto-open / close→reopen / version-upgrade / storage-failure paths; hooked into `tools/selfcheck.js`.
+
 ---
 
 ## 🛠 Tech Stack

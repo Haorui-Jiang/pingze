@@ -331,6 +331,8 @@
   #seoIntro .seo-text a { color: var(--seal); text-decoration: none; border-bottom: 1px solid var(--seal-soft); }
   #seoIntro .seo-text a:hover { background: rgba(192,86,79,0.10); }
 </style>
+<!-- 更新日志弹层样式：与 /pingshui-yun 共用同一份，改一处即全站生效 -->
+<link rel="stylesheet" href="changelog.css">
 <!-- 百度统计 -->
 <script>
 var _hmt = _hmt || [];
@@ -460,6 +462,8 @@ var _hmt = _hmt || [];
     <a href="/pingshui-yun" style="color:var(--seal);text-decoration:none">平水韵查询 · 106 韵韵部对照表</a>
     ·
     <a href="https://github.com/Haorui-Jiang/pingze" target="_blank" rel="noopener" style="color:var(--seal);text-decoration:none">开源代码（GitHub）</a>
+    ·
+    <a href="#changelog" class="cl-entry" id="changelogLink">更新日志</a>
   </footer>
 
   <div class="modal-mask" id="authModal">
@@ -514,6 +518,18 @@ var _hmt = _hmt || [];
       </div>
     </div>
   </div>
+
+  <!-- 更新日志弹层：内容与自动弹出逻辑在 changelog.js（与 /pingshui-yun 同构） -->
+  <div class="cl-mask" id="clModal" role="dialog" aria-modal="true" aria-labelledby="clTitle">
+    <div class="cl-modal">
+      <h3 id="clTitle">更新日志</h3>
+      <p class="cl-sub" id="clSub"></p>
+      <ul class="cl-list" id="clList"></ul>
+      <div class="cl-actions">
+        <button type="button" class="cl-close" id="clClose">知道了</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- 依赖顺序：Supabase SDK → 前端配置 → 韵表数据 → 本地查表引擎 → 账号系统 → 内联逻辑 -->
@@ -524,6 +540,8 @@ var _hmt = _hmt || [];
 <script src="pingze-engine.js"></script>
 <script src="pz-tip.js"></script>
 <script src="auth.js"></script>
+<!-- 更新日志：必须在首页内联逻辑之前加载，由内联逻辑末尾调用 init() -->
+<script src="changelog.js"></script>
 <script>
 /** 本次查询的原始输入与查表结果（保存记录 / AI 赏析共用） */
 var lastRawText = '';
@@ -897,6 +915,9 @@ wireAiSwitches();
 if (window.PZTip) {
   window.PZTip.attach(document.getElementById('pzGrid'), document.getElementById('pzTip'));
 }
+
+// 更新日志：页面解析完立即判断版本，未读则第一时间自动弹出
+if (window.PingzeChangelog) window.PingzeChangelog.init();
 </script>
 
 <!-- Supabase 浏览器端 SDK（UMD 版，无需构建步骤）。

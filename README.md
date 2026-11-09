@@ -73,6 +73,13 @@
 - **东八区时间口径**：数据库默认时区为 `Asia/Shanghai`，所有时间戳（注册时间、到期时间等）渲染为东八区；存储仍是 UTC 绝对时间。
 - **SEO 就绪**：两个公开页（`/` 与 `/pingshui-yun`）配置了 title / description / keywords / OG 与百度统计；`tools/gen-sitemap.js` 自动生成 sitemap。
 
+### 六、更新日志
+
+- **入口与弹窗**：首页与 `/pingshui-yun` 页脚都有「更新日志」链接，弹窗按时间倒序列出每次更新的日期与内容；有未读更新时入口带红点。
+- **更新后第一时间自动弹出**：`结果/changelog.js` 的 `CHANGELOG` 数组是唯一数据源，`LATEST_VERSION` 取首条 `version`。浏览器用 `localStorage` 记住已读版本，与当前版本不一致时打开网站即自动弹出，**每个版本只弹一次**；两个页面共用同一把 key，在任一页看过，另一页不再打扰。
+- **发布新版本怎么加**：往 `CHANGELOG` **数组最前面**加一条（`version` 必填且**必须换新值**、`date` 为 `YYYY-MM-DD`、`title` 与 `items` 写清改了什么），随站点一起部署即可，无需改其它代码。密码重置邮件落地页跳过自动弹出，避免压住改密弹层。
+- **回归**：`node tools/verify-changelog.js` 校验数据契约、两页接入一致性、以及自动弹出 / 关闭→重开 / 版本升级 / 存储异常等状态机路径，已挂进 `tools/selfcheck.js`。
+
 ---
 
 ## 🛠 技术栈

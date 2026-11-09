@@ -146,6 +146,10 @@
 - **How to publish an update**: prepend one entry to `CHANGELOG` (a **new** `version`, a `YYYY-MM-DD` `date`,
   a `title` and `items`) and deploy — no other code changes are needed. Password-recovery landing pages skip
   the auto-open so the change-password modal is never covered.
+- **What belongs in the log**: only **substantive changes** users need to know about — features, rules,
+  quotas, pricing. **Purely visual or styling tweaks (colours, underlines, adding/removing buttons, link
+  labels) are not logged and must not bump `version`**: a new version forces every visitor to see the modal on
+  their next visit, which is noise. Just deploy those changes normally.
 - **Regression**: `node tools/verify-changelog.js` checks the data contract, both pages' wiring, and the
   auto-open / close→reopen / version-upgrade / storage-failure paths; hooked into `tools/selfcheck.js`.
 

@@ -3,9 +3,12 @@
  *
  * 交互约定：
  *   · 页脚「更新日志」入口随时可打开；弹窗按倒序列出全部历史条目（日期 + 内容）。
- *   · 每次发布新版本：只需在 CHANGELOG 数组**最前面**加一条（version 取新值、
+ *   · 每次发布**实质性**更新：只需在 CHANGELOG 数组**最前面**加一条（version 取新值、
  *     date 填发布日期），LATEST_VERSION 自动取首条。用户下次打开网站时，
  *     localStorage 里的已读版本与本版本不一致 → 自动弹出本次更新，且只弹一次。
+ *   · ★ 收录范围（用户 2026-11-09 定）：只记功能 / 规则 / 额度 / 价格等用户需要知道的
+ *     实质变更；**纯界面风格类调整（样式、下划线、按钮增删、链接标注等）不记入
+ *     CHANGELOG，也不要为此更换 version**——否则每次视觉微调都会弹窗打扰全部访客。
  *   · 已读状态存 localStorage（同源共享）：首页与 /pingshui-yun 用同一把 key，
  *     在任一页看过，另一页不再打扰；打开弹窗即标记已读（含自动弹出）。
  *   · 密码重置邮件落地（type=recovery）时不自动弹，避免压住改密弹层；
@@ -30,18 +33,11 @@
    *            与用户本地已读值相同就不会自动弹出；
    *   date     面向用户展示的发布日期（YYYY-MM-DD）；
    *   title    本次更新标题；items 要点列表（纯文本，渲染时统一 HTML 转义）。
+   *
+   * ★ 只收实质变更（功能、规则、额度、价格）。界面风格类调整不进 CHANGELOG，
+   *   也别换 version —— 加了条目就等于强制所有访客下次打开必看一次弹窗。
    */
   var CHANGELOG = [
-    {
-      version: '20261109-2',
-      date: '2026-11-09',
-      title: '界面细节优化与参考来源标注',
-      items: [
-        '「更新日志」入口取消下划线与选中时的外边框，页脚更清爽',
-        '移除首页与平水韵页标题下方的 GitHub 大按钮（页脚仍保留开源代码链接）',
-        '为查表逻辑的参考网站添加「国粹网」标注，并将网址改为可点击的超链接'
-      ]
-    },
     {
       version: '20261109',
       date: '2026-11-09',
@@ -57,6 +53,18 @@
 
   var LATEST_VERSION = CHANGELOG[0].version;
 
+  /**
+   * 撤回过的临时版本 → 现行版本的折算表。
+   * 2026-11-09 曾短暂发布 '20261109-2'（界面细节条目），按收录规则已删除；
+   * 已把这版记为已读的用户本地仍是旧值，若直接把版本回退到 '20261109'，
+   * 他们会再被弹一次上一条配额日志。以后再有「发了又撤回」的版本，加一行即可。
+   */
+  var SEEN_ALIASES = { '20261109-2': '20261109' };
+
+  function normalizeSeen(seen) {
+    return seen && SEEN_ALIASES[seen] ? SEEN_ALIASES[seen] : seen;
+  }
+
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (m) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
@@ -65,7 +73,7 @@
 
   /** 版本不一致就该自动弹；首次访问（seen=null）也算新版本 */
   function shouldAutoOpen(seen, latest) {
-    return seen !== (latest || LATEST_VERSION);
+    return normalizeSeen(seen) !== (latest || LATEST_VERSION);
   }
 
   /** 隐私模式 / 禁用存储时 getItem 会抛，按「没读过」处理，不能让页面崩 */
@@ -181,6 +189,8 @@
     STORAGE_KEY: STORAGE_KEY,
     CHANGELOG: CHANGELOG,
     LATEST_VERSION: LATEST_VERSION,
+    SEEN_ALIASES: SEEN_ALIASES,
+    normalizeSeen: normalizeSeen,
     esc: esc,
     shouldAutoOpen: shouldAutoOpen,
     readSeen: readSeen,

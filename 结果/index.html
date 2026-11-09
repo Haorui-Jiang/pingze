@@ -242,6 +242,9 @@
 
   footer { text-align: center; color: var(--ink-soft); font-size: 13px; letter-spacing: 1px; margin-top: 8px; }
   footer code { font-family: monospace; }
+  /* 参考来源：标注「国粹网」，网址本身以超链接形式展示 */
+  footer .ref-link { color: var(--seal); text-decoration: underline; text-underline-offset: 2px; }
+  footer .ref-link:hover { background: rgba(192,86,79,0.10); }
 
   /* ---------- 账号系统 ---------- */
   .userbar {
@@ -353,7 +356,6 @@ var _hmt = _hmt || [];
 
   <div class="nav">
     <a href="/pingshui-yun">平水韵查询 · 106 韵韵部对照表 →</a>
-    <a href="https://github.com/Haorui-Jiang/pingze" target="_blank" rel="noopener">开源代码 · GitHub →</a>
   </div>
 
   <div class="userbar">
@@ -458,7 +460,7 @@ var _hmt = _hmt || [];
   </div>
 
   <footer>
-    复刻 <code>www.zhgc.com/pz/pz.asp</code> 查表逻辑 · 平水韵 106 韵 · 纯本地字典查询<br>
+    复刻 <a class="ref-link" href="http://www.zhgc.com/pz/pz.asp" target="_blank" rel="noopener" title="国粹网 · 平仄查询">国粹网（www.zhgc.com/pz/pz.asp）</a> 查表逻辑 · 平水韵 106 韵 · 纯本地字典查询<br>
     <a href="/pingshui-yun" style="color:var(--seal);text-decoration:none">平水韵查询 · 106 韵韵部对照表</a>
     ·
     <a href="https://github.com/Haorui-Jiang/pingze" target="_blank" rel="noopener" style="color:var(--seal);text-decoration:none">开源代码（GitHub）</a>

@@ -4,7 +4,17 @@
  */
 .cl-entry {
   color: var(--seal, #9e2f2f); text-decoration: none; cursor: pointer;
-  border-bottom: 1px dashed var(--seal-soft, #c0564f);
+  border: 0; outline: none; -webkit-tap-highlight-color: transparent;
+}
+/* 两页各自的 footer 样式里有 `a:hover { text-decoration: underline }`，且浏览器在
+   Tab / 点击聚焦时会给 <a> 画默认 outline。这两条都会让「更新日志」入口看起来
+   带下划线或外框，用户明确要求取消。带伪类的规则特异性更高，能压过页脚样式；
+   悬停只保留淡背景作「可点」提示，不再出现任何框线。 */
+.cl-entry:hover,
+.cl-entry:focus,
+.cl-entry:focus-visible,
+.cl-entry:active {
+  text-decoration: none; border: 0; outline: none; box-shadow: none;
 }
 .cl-entry:hover { background: rgba(192, 86, 79, 0.10); }
 /* 有未读更新时入口右侧的小红点（看过一次即消失） */

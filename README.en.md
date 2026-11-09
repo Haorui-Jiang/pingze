@@ -15,7 +15,7 @@
 > millisecond results, works offline, no LLM involved. AI (DeepSeek) powers only **optional**
 > prosody analysis / poetic appreciation / plain-verse translation behind three independent toggles,
 > quota-metered for signed-in users: 10/day free, 50/day for members, unlimited for Premium.
-> Reference site: `http://www.zhgc.com/pz/pz.asp`
+> Reference site: [国粹网 / Guocui Network (www.zhgc.com/pz/pz.asp)](http://www.zhgc.com/pz/pz.asp)
 
 **Live demo**: <https://www.pingze.site/>
 
@@ -489,8 +489,8 @@ not the same as enabling verification**.
 ## ⚠️ Known Limitations
 
 - **The lookup engine deliberately does not** detect genre, validate metre (adherence / lonely ping /
-  triple-ping endings / 拗救), check horse-step rhyme, or disambiguate by context — consistent with the method of the reference site
-  (zhgc.com/pz/pz.asp). Those analyses belong to the optional AI insight, as hints only.
+  triple-ping endings / 拗救), check horse-step rhyme, or disambiguate by context — consistent with the method of
+  [国粹网 (www.zhgc.com/pz/pz.asp)](http://www.zhgc.com/pz/pz.asp). Those analyses belong to the optional AI insight, as hints only.
 - **Characters missing from the rhyme table** (later or variant characters) appear as「？」placeholders that
   keep positions intact; duplicate detection does not unify simplified/traditional forms (云 ≠ 雲).
 - **AI insight defaults to a non-reasoning model** (`deepseek-chat`): reasoning models

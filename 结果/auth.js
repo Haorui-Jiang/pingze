@@ -78,13 +78,21 @@
   // 已经保存过的查询输入；用于防止对同一次查询结果重复入库
   var savedForInput = '';
   var currentQueryId = null;
-  // 会员/配额状态（由 ai_usage_today() 与后端 429 回包更新）
+  // 会员/配额状态（由 ai_usage_today() 回包的 tier 字段更新）
+  // ★ 等级由 DB 判定，前端**不再**用「额度数值 >= X」去猜 —— 免费额度
+  //   提到 10 次后，旧的 `quota >= 10 ⇒ 会员` 会把免费用户误判成会员。
   var currentTier = 'free';
   var memberExpiresAt = null;
 
-  /** 额度说明：免费每日 3 次 AI 赏析，会员每日 10 次（迁移 0007_v5_query_engine.sql）。
-   *  查表功能本身永久免费、不计次。 */
-  var DAILY_QUOTA = 10;
+  /** AI 每日额度（2026-11-09 调整；权威定义在 DB 迁移
+   *  20261109140000_premium_tier_and_quota.sql 的 ai_daily_quota()）：
+   *    free 10 次 · member 50 次 · premium 不限次
+   *  这里只用于弹层 / 提示文案，实际放行永远以服务端 RPC 为准。
+   *  查表功能本身永久免费、不计次。
+   *  ★ 这两个数字与 lib/ai-insight.js、结果/index.html、三份 README 构成
+   *    跨文件契约，由 tools/verify-quota.js 断言一致，改一处必须改全部。 */
+  var FREE_AI_QUOTA = 10;
+  var MEMBER_AI_QUOTA = 50;
 
   /** AI 赏析类型 → 中文标签（与后端 lib/ai-insight.js 的 TYPES 白名单、
    *  DB 里 query_insights.kind 的 check 约束一致；三方漏改一处就是静默失效） */
@@ -239,12 +247,15 @@
       var res = await client.rpc('ai_usage_today');
       var data = res && res.data;
       if (data) {
-        currentTier = data.quota >= DAILY_QUOTA ? 'member' : 'free';
+        // tier / unlimited 由 DB 函数直接回传（含有效期判定），不要自己猜。
+        currentTier = data.tier || 'free';
       }
       var node = $('quotaInfo');
       if (node && data) {
-        var label = currentTier === 'member' ? '会员' : '免费';
-        node.textContent = label + ' · AI 赏析剩余 ' + data.remaining + '/' + data.quota;
+        var label = { free: '免费', member: '会员', premium: '特级会员' }[currentTier] || '免费';
+        node.textContent = data.unlimited
+          ? label + ' · AI 赏析不限次（今日已用 ' + data.used + ' 次）'
+          : label + ' · AI 赏析剩余 ' + data.remaining + '/' + data.quota;
       }
     } catch (e) {
       /* 配额显示是锦上添花，失败就算了 */
@@ -253,11 +264,17 @@
 
   // ---------------------------------------------------------------- 会员 / 二维码
 
-  /** 是否有效会员（tier=member 且未过期） */
+  /** 是否有效付费会员（member / premium 且未过期）。
+   *  currentTier 已由 RPC 判过有效期：过期的付费档 RPC 会返回 free。 */
   function isMember() {
-    if (currentTier !== 'member') return false;
+    if (currentTier !== 'member' && currentTier !== 'premium') return false;
     if (!memberExpiresAt) return true;
     return new Date(memberExpiresAt).getTime() > Date.now();
+  }
+
+  /** 是否特级会员（AI 赏析每日不限次） */
+  function isPremium() {
+    return currentTier === 'premium';
   }
 
   function openQr(title, sub, tipMsg) {
@@ -333,7 +350,8 @@
       note.textContent = isForgot
         ? '填写注册时用的邮箱；若该邮箱没有注册过会当场提示。验证通过后我们会发一封带「重置密码」链接的邮件（有效期 1 小时，请留意垃圾邮件夹）。'
         : (isSignIn ? '登录后' : '注册后') +
-          '查询记录可保存；AI 平仄分析 / 诗词鉴赏每日免费 3 次，会员 ' + DAILY_QUOTA + ' 次';
+          '查询记录可保存；AI 平仄分析 / 诗词鉴赏每日免费 ' + FREE_AI_QUOTA +
+          ' 次，会员 ' + MEMBER_AI_QUOTA + ' 次，特级会员不限次';
     }
     if ($('authSubmit')) $('authSubmit').textContent = isForgot ? '发送重置邮件' : (isSignIn ? '登　录' : '注　册');
     if ($('authSwitch')) $('authSwitch').textContent = isForgot ? '返回登录' : (isSignIn ? '没有账号？去注册' : '已有账号？去登录');
@@ -1099,8 +1117,9 @@
     /** AI 赏析生成成功后回调：内容入库（内部先确保查询记录已存在） */
     onAiDone: onAiDone,
     openLogin: openLogin,
-    /** 会员/配额状态 */
+    /** 会员/配额状态（三档：free / member / premium） */
     isMember: isMember,
+    isPremium: isPremium,
     getTier: function () { return currentTier; },
     openUpgradeQr: openQr,
     closeUpgradeQr: closeQr,

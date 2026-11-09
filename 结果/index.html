@@ -389,7 +389,7 @@ var _hmt = _hmt || [];
     <div class="pz-grid" id="pzGrid"></div>
 
     <div class="ai-block">
-      <div class="grid-title">AI 赏析（可选，默认关闭；勾选后才调用，计入每日额度）</div>
+      <div class="grid-title">AI 赏析（可选，默认关闭；勾选后才调用，计入每日额度，特级会员不限次）</div>
       <div class="ai-row">
         <label class="switch"><input type="checkbox" id="swAnalysis"><i></i><span>平仄分析</span></label>
         <button class="mini-btn" id="btnAiAnalysis" disabled onclick="generateAi('analysis')">生成平仄分析</button>
@@ -405,7 +405,7 @@ var _hmt = _hmt || [];
         <button class="mini-btn" id="btnAiTranslation" disabled onclick="generateAi('translation')">生成白话译文</button>
       </div>
       <pre class="ai-out" id="aiOutTranslation"></pre>
-      <p class="hint">免费每日 3 次、会员每日 10 次；AI 仅依据上方查表结果做分析，不会自行改判平仄。登录后生成的内容会自动存入「查询记录」，可随时回看。</p>
+      <p class="hint">免费每日 10 次、会员每日 50 次、特级会员不限次；AI 仅依据上方查表结果做分析，不会自行改判平仄。登录后生成的内容会自动存入「查询记录」，可随时回看。</p>
       <p class="hint ai-locked-tip" id="aiLockedTip"></p>
     </div>
 
@@ -465,7 +465,7 @@ var _hmt = _hmt || [];
   <div class="modal-mask" id="authModal">
     <div class="modal">
       <h3 id="authTitle">登录</h3>
-      <p class="hint" id="authQuotaNote">登录后查询记录可保存；AI 赏析每日免费 3 次</p>
+      <p class="hint" id="authQuotaNote">登录后查询记录可保存；AI 赏析每日免费 10 次</p>
       <input id="authEmail" type="email" placeholder="邮箱" autocomplete="email">
       <input id="authPassword" type="password" placeholder="密码（至少 8 位，含字母和数字）" autocomplete="current-password">
       <p class="hint" id="authTip"></p>
@@ -497,15 +497,15 @@ var _hmt = _hmt || [];
   <div class="modal-mask" id="qrModal">
     <div class="modal">
       <h3 id="qrTitle">AI 赏析额度</h3>
-      <p class="hint" id="qrSub">免费用户每天可用 3 次，会员每天 10 次</p>
+      <p class="hint" id="qrSub">免费用户每天 10 次，会员每天 50 次，特级会员不限次</p>
       <div class="qr-box">
-        <span class="qr-price">会员 ¥1 / 天 · 按月计费（30 天 ¥30）</span>
+        <span class="qr-price">会员 ¥20 / 月　·　特级会员 ¥50 / 月（按月计费，30 天）</span>
         <img src="二维码.jpg" alt="运营人微信二维码">
         <div class="qr-step">
           ① 长按 / 截图后用<b>微信扫一扫</b>识别二维码<br>
-          ② 添加网站运营人，说明「<b>开通会员</b>」<br>
-          ③ 付款并与运营人确认后，由运营人在后台为你开通<br>
-          ④ 开通后<b>刷新本页</b>，即可享受每日 10 次 AI 赏析
+          ② 添加网站运营人，说明「<b>开通会员</b>」或「<b>开通特级会员</b>」<br>
+          ③ 付款并与运营人确认后，由运营人在后台为你开通对应等级<br>
+          ④ 开通后<b>刷新本页</b>，会员每日 50 次、特级会员不限次
         </div>
       </div>
       <p class="hint" id="qrTip"></p>
@@ -779,7 +779,7 @@ async function generateAi(type) {
 
   // 未登录：本地就先拦下，省一次注定 401 的请求
   if (window.PingzeAuth && !window.PingzeAuth.getUser()) {
-    window.PingzeAuth.openLogin('AI 赏析需要登录后使用；登录后每日免费 3 次。');
+    window.PingzeAuth.openLogin('AI 赏析需要登录后使用；登录后每日免费 10 次。');
     return;
   }
 
@@ -827,12 +827,13 @@ async function generateAi(type) {
       if (r.status === 503) {
         out.textContent += '\n（本次请求未执行，也未消耗你的额度。）';
       }
-      // 今日免费额度用尽：顺便把开通会员的二维码弹出来，别让用户卡死在这一步
+      // 今日额度用尽：弹出开通二维码，别让用户卡死在这一步。
+      // 会员额度用尽时服务端同样带 needUpgrade（引导升级特级会员）。
       if (data.needUpgrade && window.PingzeAuth && window.PingzeAuth.openUpgradeQr) {
         window.PingzeAuth.openUpgradeQr(
           'AI 赏析额度',
-          '今日免费 AI 赏析已用尽（每日 3 次）；会员每日 10 次',
-          '支付后请联系运营人开通，开通后刷新本页即可。'
+          '今日额度已用尽；免费每日 10 次，会员每日 50 次，特级会员不限次',
+          '支付后请联系运营人开通对应等级，开通后刷新本页即可。'
         );
       }
       return;
@@ -845,8 +846,10 @@ async function generateAi(type) {
         : 'AI 没有返回内容，请重试。';
       return;
     }
+    // 特级会员不限次：服务端回 remaining=null，不要显示「剩余 null / -1 次」。
     out.textContent = data.content +
-      (typeof data.remaining === 'number' ? '\n\n—— 今日 AI 赏析剩余 ' + data.remaining + ' 次 ——' : '');
+      (typeof data.remaining === 'number' && data.remaining >= 0
+        ? '\n\n—— 今日 AI 赏析剩余 ' + data.remaining + ' 次 ——' : '');
     // 入库：登录用户把这次 AI 输出存进 query_insights，之后可在「查询记录」里回看。
     // 静默失败（auth.js 内部已兜住），不打断本次赏析体验。
     if (window.PingzeAuth) window.PingzeAuth.onAiDone(type, data.content, data.model);

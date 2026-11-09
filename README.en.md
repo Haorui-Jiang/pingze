@@ -14,7 +14,7 @@
 > Tonal analysis runs as a **local dictionary lookup in the browser** (106 rhyme categories, 7,000+ characters) —
 > millisecond results, works offline, no LLM involved. AI (DeepSeek) powers only **optional**
 > prosody analysis / poetic appreciation / plain-verse translation behind three independent toggles,
-> quota-metered for signed-in users.
+> quota-metered for signed-in users: 10/day free, 50/day for members, unlimited for Premium.
 > Reference site: `http://www.zhgc.com/pz/pz.asp`
 
 **Live demo**: <https://www.pingze.site/>
@@ -61,10 +61,14 @@
   attempts, so an outage doesn't stretch every request to the full timeout budget. AI is the only
   billable endpoint here, so trading a little availability for billing safety is a deliberate choice.
 - **Failure isolation**: an AI failure only affects that one generation — the lookup result above stays intact.
-- **Per-call quota**: 3/day for free users, 10/day for members, reset on the Beijing-time calendar day
-  (`ai_usage_today()` / `ai_quota_consume()` RPCs; the latter is security definer for atomic deduction).
-  A model timeout or failure **still consumes the call** by design, which prevents retry loops from
-  burning money.
+- **Per-call quota**: 10/day for free users, 50/day for members, and **unlimited** for Premium,
+  reset on the Beijing-time calendar day. All three tiers are defined once in the DB function
+  `ai_daily_quota()` (migration `20261109140000_premium_tier_and_quota.sql`); both
+  `ai_usage_today()` (client-side lookup) and `ai_quota_consume()` (security definer, atomic
+  deduction) call it, and their payloads now carry `tier` / `unlimited` so the server never has
+  to guess the tier from a quota number. A model timeout or failure **still consumes the call**
+  by design, which prevents retry loops from burning money. Unlimited Premium calls are still
+  subject to the IP rate limit of 20 requests/minute.
 
 ### 3. Accounts and data
 
@@ -86,18 +90,29 @@
 - **Save-and-see**: saving auto-opens and refreshes the panel (already-open panels only refresh, no scroll);
   three hints tell anonymous visitors that saving requires signing in.
 
-### 4. Membership and operations
+### 4. Membership and operations (three tiers)
 
-- **Daily quota**: 3/day for free users, 10/day for members (AI insight only — the lookup never counts).
-- **Upgrade prompt**: when AI quota runs out, a QR-code modal invites the user to subscribe (¥30 for 30 days);
-  quota is authoritative on the server via RPC, so refreshing the page cannot bypass it.
-- **Admin console at `/admin`**: authenticated by an email allow-list (`ADMIN_EMAILS`), re-validated on the
-  server with `service_role` (the frontend is a convenience layer only). Browse users, query-record counts,
-  today's AI usage, sign-up and last sign-in times (all Beijing time), and change membership tier with an
-  expiry countdown.
-- **Membership validity**: a member is valid only when `tier = member` **and** `member_expires_at > now()`.
-  Expiry does not auto-downgrade — the tier simply goes inactive, leaving the operator to renew or downgrade
-  deliberately, which keeps reconciliation simple.
+| Tier | `tier` value | AI insight quota | Price |
+|---|---|---|---|
+| Free | `free` | 10/day | free |
+| Member | `member` | 50/day | ¥20 / month (30 days) |
+| Premium | `premium` | **unlimited** | ¥50 / month (30 days) |
+
+- **Daily quota**: applies to AI insight only — the tone/rhyme lookup never counts. Resets on the
+  Beijing-time calendar day.
+- **Upgrade prompt**: when the quota runs out, a QR-code modal invites the user to subscribe as a
+  Member or Premium member; quota is authoritative on the server via RPC, so refreshing the page
+  cannot bypass it.
+- **Rate guard**: "unlimited per day" does **not** mean unlimited request rate. All tiers share the
+  same IP rate limit (20 requests/minute) so scripts cannot run up the DeepSeek bill.
+- **Admin console at `/admin`**: authenticated by an email allow-list (`ADMIN_EMAILS`), re-validated on
+  the server with `service_role` (the frontend is a convenience layer only). Browse users, query-record counts,
+  today's AI usage, sign-up and last sign-in times (all Beijing time), and switch any user between the
+  three tiers via a dropdown, with an expiry countdown.
+- **Membership validity**: a paid tier is valid only when `tier in ('member','premium')` **and**
+  `member_expires_at > now()`. On expiry the account falls back to the free tier (10/day); the
+  `tier` column is **not** rewritten — it simply goes inactive, leaving the operator to renew or
+  downgrade deliberately, which keeps reconciliation simple.
 
 ### 5. Engineering
 
@@ -106,7 +121,7 @@
 - **One implementation, two runtimes**: the shared modules under `lib/` are used by both the local server and
   the Netlify functions, so the two backends cannot drift apart.
 - **Strict data isolation**: RLS policies plus column-level privileges; users cannot promote themselves to
-  `member` or tamper with quota counters.
+  `member` / `premium` or tamper with quota counters.
 - **The AI capability list is a four-way contract**: the three AI capabilities (prosody analysis /
   appreciation / translation) are registered in **four** places — the backend `TYPES` allow-list, the
   `PROMPTS` keys, `AI_KIND_LABEL` in `结果/auth.js`, and the `query_insights.kind` check constraint in
@@ -246,6 +261,7 @@ If the port is busy, run `PORT=3001 npm start`.
 | `20261016094246_add_query_insights.sql` | Creates the `query_insights` table for AI output (FK `query_id → queries` with cascade delete; RLS matching `queries`: own rows read/insert/delete, no UPDATE — append-only); `kind` locked by a check constraint to `analysis` / `appreciation` |
 | `20261016093000_harden_permissions.sql` | Permission hardening: revoke functions' `PUBLIC EXECUTE` (PostgreSQL grants it by default, so revoking only named roles is a silent no-op), column-level REVOKE, explicit revocation on new tables |
 | `20261020113000_add_translation_insight.sql` | Widens the `query_insights.kind` check constraint to `analysis` / `appreciation` / `translation` (plain-verse translation). **Adds an enum value rather than a column** — the table deliberately denies UPDATE (append-only), so a new column would force us to grant UPDATE just to fill it, breaking the existing "records are immutable" semantics. The migration looks the constraint's **real name** up in `pg_constraint` before dropping it rather than hardcoding the auto-generated name |
+| `20261109140000_premium_tier_and_quota.sql` | **2026-11-09 quota + membership change**: widens the `tier` check to `free / member / premium`; adds `ai_daily_quota(tier, expires_at)` as the **single source of truth** for the three quotas (10 / 50 / `-1` = unlimited); rewrites `ai_usage_today()` and `ai_quota_consume(uuid)` so their payloads carry `tier` / `unlimited`. Premium usage is still counted, and the IP rate limit still applies |
 
 3. If new tables are not visible over REST afterwards, run `NOTIFY pgrst, 'reload schema';`
    once to refresh the PostgREST schema cache.

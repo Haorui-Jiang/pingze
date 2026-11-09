@@ -131,6 +131,22 @@
       '<div class="muted" style="font-size:12px">' + expText + '</div>';
   }
 
+  /** 后台可选的三档（与 DB 的 profiles_tier_check、lib/admin.js 的 TIERS 一致）。
+   *  tools/verify-quota.js 会断言三处档位清单相同，加档必须三处一起改。 */
+  var TIER_OPTIONS = [
+    ['free', '免费用户（10 次/天）'],
+    ['member', '会员 ¥20/月（50 次/天）'],
+    ['premium', '特级会员 ¥50/月（不限次）'],
+  ];
+  var TIER_LABEL = { free: '免费用户', member: '会员', premium: '特级会员' };
+
+  function tierOptions(current) {
+    return TIER_OPTIONS.map(function (t) {
+      return '<option value="' + t[0] + '"' +
+        (t[0] === current ? ' selected' : '') + '>' + esc(t[1]) + '</option>';
+    }).join('');
+  }
+
   function renderUsers(users) {
     var tbody = $('userRows');
     if (!users.length) {
@@ -139,12 +155,20 @@
     }
     var html = '';
     users.forEach(function (u) {
-      var isMember = u.member_active === true;
-      var badge = isMember
-        ? '<span class="badge member">会员</span>'
-        : (u.tier === 'member'
-            ? '<span class="badge free">会员(已过期)</span>'
-            : '<span class="badge free">免费</span>');
+      var tier = u.tier || 'free';
+      var active = u.member_active === true;
+      var badge;
+      if (active) {
+        badge = tier === 'premium'
+          ? '<span class="badge premium">特级会员</span>'
+          : '<span class="badge member">会员</span>';
+      } else if (tier === 'premium') {
+        badge = '<span class="badge free">特级会员(已过期)</span>';
+      } else if (tier === 'member') {
+        badge = '<span class="badge free">会员(已过期)</span>';
+      } else {
+        badge = '<span class="badge free">免费</span>';
+      }
       html += '<tr data-uid="' + esc(u.id) + '">' +
         '<td>' + esc(u.email) + '</td>' +
         '<td>' + badge + '</td>' +
@@ -155,34 +179,37 @@
         '<td>' + esc(u.provider || 'email') + '</td>' +
         '<td>' + (u.query_count || 0) + '</td>' +
         '<td>' + (u.ai_used_today || 0) + '</td>' +
-        '<td><button class="ghost tier-btn" data-uid="' + esc(u.id) + '" ' +
-            'data-tier="' + esc(u.tier || 'free') + '" ' +
-            'data-email="' + esc(u.email) + '">改等级</button></td>' +
+        '<td><select class="tier-select" data-uid="' + esc(u.id) + '" ' +
+            'data-email="' + esc(u.email) + '" ' +
+            'data-current="' + esc(tier) + '">' + tierOptions(tier) + '</select></td>' +
       '</tr>';
     });
     tbody.innerHTML = html;
 
-    Array.prototype.forEach.call(tbody.querySelectorAll('.tier-btn'), function (btn) {
-      btn.addEventListener('click', function () {
-        changeTier(btn.getAttribute('data-uid'),
-                   btn.getAttribute('data-tier'),
-                   btn.getAttribute('data-email'));
+    Array.prototype.forEach.call(tbody.querySelectorAll('.tier-select'), function (sel) {
+      sel.addEventListener('change', function () {
+        changeTier(sel.getAttribute('data-uid'), sel.value,
+                   sel.getAttribute('data-email'), sel.getAttribute('data-current'), sel);
       });
     });
   }
 
   /**
-   * 修改会员等级（运营人操作）。
-   * 会员按月计费、30 天；已是会员则续费顺延。
+   * 修改会员等级（运营人操作）。三档任选：free / member / premium。
+   * 付费档按月计费、30 天；已是有效付费会员则续费顺延。
+   * ★ 取消 / 失败时把 select 还原，避免「界面显示已改、库里没改」。
    */
-  async function changeTier(uid, currentTier, email) {
-    var isMember = currentTier === 'member';
-    var action = isMember ? '降级为「免费用户」' : '开通「会员」（30 天）';
-    if (!confirm('确定要把 ' + email + ' ' + action + ' 吗？')) return;
+  async function changeTier(uid, nextTier, email, currentTier, sel) {
+    var restore = function () { if (sel) sel.value = currentTier; };
+    if (!nextTier || nextTier === currentTier) return;
+    var label = TIER_LABEL[nextTier] || nextTier;
+    var action = nextTier === 'free'
+      ? '降级为「免费用户」'
+      : '开通 / 切换为「' + label + '」（30 天）';
+    if (!confirm('确定要把 ' + email + ' ' + action + ' 吗？')) { restore(); return; }
 
     var token = await getToken();
-    if (!token) { showLogin(); tip('会话已失效，请重新登录', true); return; }
-    var nextTier = isMember ? 'free' : 'member';
+    if (!token) { restore(); showLogin(); tip('会话已失效，请重新登录', true); return; }
     try {
       var res = await fetch('/api/admin-set-tier', {
         method: 'POST',
@@ -190,9 +217,10 @@
         body: JSON.stringify({ userId: uid, tier: nextTier, days: 30 }),
       });
       var d = await res.json().catch(function () { return {}; });
-      if (!res.ok) { alert('操作失败：' + (d.error || ('HTTP ' + res.status))); return; }
-      await loadDashboard(); // 重新拉取，倒计时等一并刷新
+      if (!res.ok) { restore(); alert('操作失败：' + (d.error || ('HTTP ' + res.status))); return; }
+      await loadDashboard(); // 重新拉取，倒计时 / 徽章一并刷新
     } catch (e) {
+      restore();
       alert('网络异常：' + (e && e.message ? e.message : e));
     }
   }

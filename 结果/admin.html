@@ -61,12 +61,13 @@
     .muted { color: var(--muted); }
     code { background: #f1f5f9; padding: 1px 6px; border-radius: 4px; font-size: 12px; color: #475569; }
 
-    /* 会员徽章与倒计时 */
+    /* 会员徽章与倒计时（三档：免费 / 会员 / 特级会员） */
     .badge {
       display: inline-block; padding: 2px 9px; border-radius: 999px;
       font-size: 12px; font-weight: 600; line-height: 1.6;
     }
     .badge.member { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+    .badge.premium { background: #ede9fe; color: #5b21b6; border: 1px solid #c4b5fd; }
     .badge.free { background: #f1f5f9; color: #64748b; border: 1px solid var(--line); }
     /* 剩余天数：≥5 天正常色；<5 天红色醒目 */
     .days-ok { color: var(--ok); font-weight: 600; }

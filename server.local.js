@@ -52,9 +52,9 @@ const limiter = require('./lib/rate-limit');
 const lookup = require('./lib/account-lookup');
 
 // AI 接口的 IP 级限流（2026-10-16 安全审查 P1-1）。
-// 口径：配额管「总量」，限流管「速率」，两道都要有。
-// 20 次/分钟对正常用户足够宽松（免费用户一天总共才 3 次），
-// 对「配额耗尽前瞬间打完」和「并发压接口」两种滥用形态足够收紧。
+// 口径：配额管「总量」（免费 10 / 会员 50 / 特级不限次），限流管「速率」，
+// 两道都要有。20 次/分钟对真人足够宽松，对「配额耗尽前瞬间打完」和
+// 「并发压接口」两种滥用形态足够收紧；特级会员同样受速率护栏约束。
 const AI_RATE_LIMIT = Number(process.env.AI_RATE_LIMIT_PER_MIN) || 20;
 const AI_RATE_WINDOW_MS = 60 * 1000;
 

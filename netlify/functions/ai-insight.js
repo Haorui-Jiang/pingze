@@ -21,7 +21,9 @@ const insight = require('../../lib/ai-insight');
 const limiter = require('../../lib/rate-limit');
 
 // AI 接口的 IP 级限流：20 次/分钟/IP。
-// 免费用户一天总共 3 次、会员 10 次，故 20/分钟对真人宽松、对脚本 abusive。
+// 每日配额：免费 10 次、会员 50 次、特级会员不限次；限流管速率、配额管总量，
+// 两道护栏并行 —— 特级会员「每日次数不限」≠「可无限速刷接口」，
+// 这道速率限制对所有等级一视同仁，防脚本把 DeepSeek 账单打爆。
 const AI_RATE_LIMIT = 20;
 const AI_RATE_WINDOW_MS = 60 * 1000;
 

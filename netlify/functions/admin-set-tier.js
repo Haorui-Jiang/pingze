@@ -1,4 +1,5 @@
-// Netlify Function 版：修改用户会员等级（运营人开通 / 降级）
+// Netlify Function 版：修改用户会员等级（运营人开通 / 续费 / 降级）
+// 三档：free（免费）/ member（会员）/ premium（特级会员，AI 每日不限次）。
 // 挂载路径：/.netlify/functions/admin-set-tier（经 netlify.toml 的 /api/* 映射成 /api/admin-set-tier）
 // 与本地 server.local.js 共用 lib/admin.js，鉴权逻辑一致（ADMIN_EMAILS 白名单）。
 
